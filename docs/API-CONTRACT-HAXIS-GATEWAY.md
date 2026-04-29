@@ -39,11 +39,11 @@ Os endpoints expostos pelo motor em `/api/v1/` são protegidos pela `MASTER_API_
 
 | Método | URL | Autenticação | Função | Request | Response |
 |---|---|---|---|---|---|
-| `POST` | `/api/v1/sessions` | `X-Master-Key` | Criar sessão | `{ "sessionId": "string" }` | `{ status, sessionId, token }` |
-| `GET` | `/api/v1/sessions` | Nenhuma | Listar sessões | N/A | Lista de sessões |
+| `POST` | `/api/v1/sessions` | `X-Master-Key` | Criar sessão | `{ "sessionId": "string" }` | `{ status, sessionId, session: { id, token } }` |
+| `GET` | `/api/v1/sessions` | Nenhuma | Listar sessões | N/A | `{ status, data: [...] }` |
 | `DELETE` | `/api/v1/sessions/:id` | Bearer Token | Deletar sessão | N/A | `{ status, message }` |
-| `POST` | `/api/v1/messages` | Bearer Token | Enviar texto | `{ "jid": "string", "type": "text", "message": { "text": "..." } }` | `{ status, messageId }` |
-| `POST` | `/api/v1/messages` | Bearer Token | Enviar mídia | `{ "jid": "string", "type": "image", "message": { "image": { "id": "..." } } }` | `{ status, messageId }` |
+| `POST` | `/api/v1/messages?sessionId=...` | Bearer Token | Enviar texto | `{ "to": "123...", "type": "text", "text": { "body": "..." } }` | `{ status, message: "...", results: [...] }` |
+| `POST` | `/api/v1/messages?sessionId=...` | Bearer Token | Enviar mídia | `{ "to": "123...", "type": "image", "image": { "id": "...", "caption": "..." } }` | `{ status, message: "...", results: [...] }` |
 | `POST` | `/api/v1/media` | Bearer Token | Fazer upload de mídia | Form-data (file) | `{ status, mediaId, url }` |
 
 *O painel técnico opera de forma independente usando sessão/cookie baseados na `ADMIN_DASHBOARD_PASSWORD`.*
