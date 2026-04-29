@@ -1,0 +1,16 @@
+---
+deployment:
+  tasks:
+    - export PATH=/opt/cpanel/ea-nodejs18/bin:$PATH
+    - export APP_PATH=/home/usebws/public_html/api
+    - export DATA_PATH=/home/usebws/apiws-data
+    - /bin/echo "Deploy HAXIS WhatsApp Engine iniciado"
+    - /bin/echo "Criando/Validando paths sensíveis seguros..."
+    - npm run setup:storage || /bin/echo "Aviso: setup:storage falhou"
+    - /bin/echo "Validando ambiente de produção..."
+    - npm run check:production || /bin/echo "Aviso: check:production reportou problemas"
+    - /bin/echo "Instalando dependências (se npm estiver disponível)..."
+    - npm install || /bin/echo "Aviso: npm install não pôde ser executado automaticamente. Execute manualmente no cPanel."
+    - /bin/echo "Criando flag de restart para o Passenger/Node..."
+    - mkdir -p tmp && touch tmp/restart.txt
+    - /bin/echo "Deploy HAXIS WhatsApp Engine finalizado"

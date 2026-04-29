@@ -1,0 +1,20 @@
+# Bloquear acesso a arquivos sensíveis e diretórios internos do repositório
+Options -Indexes
+
+<FilesMatch "^\.env|^\.git|\.sqlite|\.db|\.log|\.bak|\.backup|\.old|\.md$">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "^package\.json|^package-lock\.json|^README\.md|^NOTICE\.md|^AGENTS\.md|^DEPLOYMENT-HAXIS\.md|^CHECKLIST-PRODUCTION\.md$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Bloquear diretórios internos
+    RewriteRule ^(node_modules|src|docs|logs|media|auth_info_baileys|storage|database|db|scripts|tests)/ - [F,L]
+
+    # Se o tráfego estiver sendo gerenciado pelo Passenger/Node, estas regras
+    # servem como camada adicional de segurança para requisições diretas ao Apache.
+</IfModule>
