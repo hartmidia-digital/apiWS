@@ -62,24 +62,33 @@ async function sendWebhook(eventType, engineSessionId, rawPayload) {
 
     const payloadString = JSON.stringify(payload);
     let headers = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Haxis-Event-Id': payload.event_id,
+        'X-Haxis-Event-Type': payload.event_type,
+        'X-Haxis-Timestamp': payload.timestamp
     };
 
     if (WEBHOOK_SECRET) {
         const signature = crypto.createHmac('sha256', WEBHOOK_SECRET)
             .update(payloadString)
             .digest('hex');
-        headers['X-Hub-Signature-256'] = signature;
+        headers['X-Haxis-Signature'] = signature;
     }
 
+    const timeoutMs = parseInt(process.env.WEBHOOK_TIMEOUT_MS) || 5000;
+
     try {
-        await axios.post(WEBHOOK_URL, payloadString, {
+        // Fire-and-forget: não bloquear execução aguardando retorno
+        axios.post(WEBHOOK_URL, payloadString, {
             headers,
-            timeout: 5000 // 5 segundos de timeout
+            timeout: timeoutMs
+        }).then(() => {
+            logger.debug(`Webhook enviado: ${eventType} para sessão ${engineSessionId}`);
+        }).catch(error => {
+            logger.error(`Falha ao enviar webhook ${eventType}: ${error.message}`);
         });
-        logger.debug(`Webhook enviado: ${eventType} para sessão ${engineSessionId}`);
     } catch (error) {
-        logger.error(`Falha ao enviar webhook ${eventType}: ${error.message}`);
+        logger.error(`Falha ao processar webhook ${eventType}: ${error.message}`);
     }
 }
 
