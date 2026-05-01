@@ -3,7 +3,7 @@
 Antes de considerar o deploy na `api.useb.ws` como concluído, execute as seguintes verificações:
 
 ## 1. Ambiente, Permissões e Paths Seguros
-- [ ] O repositório foi clonado corretamente em `/home/usebws/public_html/api`.
+- [ ] O repositório foi clonado corretamente em `/home/usebws/api`.
 - [ ] As variáveis de ambiente essenciais (`MASTER_API_KEY`, `ADMIN_DASHBOARD_PASSWORD`, `WEBHOOK_SECRET`, `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY`) foram preenchidas no painel do Node.js App.
 - [ ] O banco de dados e arquivos críticos (`auth_info_baileys`) foram criados fora da pasta pública (em `/home/usebws/apiws-data/`).
 - [ ] Execute `npm run check:production` e confirme que não há erros bloqueantes.
