@@ -2,7 +2,7 @@
 deployment:
   tasks:
     - export PATH=/opt/cpanel/ea-nodejs18/bin:$PATH
-    - export APP_PATH=/home/usebws/public_html/api
+    - export APP_PATH=/home/usebws/api
     - export DATA_PATH=/home/usebws/apiws-data
     - /bin/echo "Deploy HAXIS WhatsApp Engine iniciado"
     - /bin/echo "Criando/Validando paths sensíveis seguros..."
