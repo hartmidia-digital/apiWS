@@ -39,6 +39,7 @@ const { errorHandler, notFoundHandler } = require('./src/middleware/errorHandler
 
 // API v1 (includes legacy endpoints)
 const { initializeApi } = require('./src/routes/api');
+const { sendWebhook } = require('./src/utils/webhookHaxis');
 
 // Validate encryption key
 const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY;
@@ -50,6 +51,7 @@ if (!ENCRYPTION_KEY || !isValidKey(ENCRYPTION_KEY)) {
 
 // Initialize Express
 const app = express();
+app.set('trust proxy', true);
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
@@ -93,7 +95,7 @@ app.use(rateLimit({
     message: { status: 'error', message: 'Too many requests' },
     standardHeaders: true,
     legacyHeaders: false,
-    validate: { trustProxy: false }
+    validate: { trustProxy: true }
 }));
 
 app.use(session({
@@ -278,11 +280,14 @@ app.post('/api/v1/sessions', async (req, res) => {
         // Connect to WhatsApp
         whatsappService.connect(sessionId, (id, status, detail, qr) => {
             Session.updateStatus(id, status, detail);
+            sendWebhook('session.status', id, { status, detail, state: status });
             broadcastToClients({
                 type: 'session-update',
                 data: { sessionId: id, status, detail, qr }
             });
-        }, null);
+        }, (id, msg) => {
+            sendWebhook('message.received', id, msg);
+        });
 
         // Update sessionTokens map
         if (session.token) {
@@ -344,11 +349,14 @@ app.get('/api/v1/sessions/:sessionId/qr', (req, res) => {
     // Reconnect to trigger QR generation
     whatsappService.connect(sessionId, (id, status, detail, qr) => {
         Session.updateStatus(id, status, detail);
-        broadcastToClients({
+        sendWebhook('session.status', id, { status, detail, state: status });
+            broadcastToClients({
             type: 'session-update',
             data: { sessionId: id, status, detail, qr }
         });
-    }, null);
+        }, (id, msg) => {
+            sendWebhook('message.received', id, msg);
+        });
 
     return response.success(res, { message: 'QR code generation started' });
 });
@@ -387,11 +395,14 @@ User.ensureAdmin(process.env.ADMIN_DASHBOARD_PASSWORD);
 
             whatsappService.connect(session.id, (id, status, detail, qr) => {
                 Session.updateStatus(id, status, detail);
+                sendWebhook('session.status', id, { status, detail, state: status });
                 broadcastToClients({
                     type: 'session-update',
                     data: { sessionId: id, status, detail, qr }
                 });
-            }, null);
+            }, (id, msg) => {
+                sendWebhook('message.received', id, msg);
+            });
         }
     }
 })();

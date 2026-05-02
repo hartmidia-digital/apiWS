@@ -165,7 +165,7 @@ async function connect(sessionId, onUpdate, onMessage) {
 
     // Handle incoming messages
     if (onMessage) {
-        sock.ev.on('messages.upsert', async (m) => {
+        sock.ev.on('messages.upsert', async (m) => { console.log('[DEBUG] messages.upsert event:', m.messages.length, 'messages');
             const msg = m.messages[0];
             if (!msg.key.fromMe && msg.message) {
                 onMessage(sessionId, msg);
