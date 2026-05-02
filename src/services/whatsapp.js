@@ -20,7 +20,7 @@ const Session = require('../models/Session');
 const ActivityLog = require('../models/ActivityLog');
 
 // Logger configuration
-const defaultLogLevel = process.env.NODE_ENV === 'production' ? 'silent' : 'warn';
+const defaultLogLevel = "info";
 const logger = pino({ level: process.env.LOG_LEVEL || defaultLogLevel });
 
 // Active socket connections (in-memory)
@@ -165,9 +165,9 @@ async function connect(sessionId, onUpdate, onMessage) {
 
     // Handle incoming messages
     if (onMessage) {
-        sock.ev.on('messages.upsert', async (m) => { console.log('[DEBUG] messages.upsert event:', m.messages.length, 'messages');
+        sock.ev.on('messages.upsert', async (m) => { console.log('[DEBUG] Message Object:', JSON.stringify(m.messages[0]));
             const msg = m.messages[0];
-            if (!msg.key.fromMe && msg.message) {
+            if (msg.message) {
                 onMessage(sessionId, msg);
             }
         });
