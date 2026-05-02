@@ -48,6 +48,10 @@ Os endpoints expostos pelo motor em `/api/v1/` são protegidos pela `MASTER_API_
 
 *O painel técnico opera de forma independente usando sessão/cookie baseados na `ADMIN_DASHBOARD_PASSWORD`.*
 
+Observações operacionais:
+- O endpoint `/api/v1/messages` também aceita destinatário individual em formato JID `...@s.whatsapp.net` e normaliza para número antes do envio.
+- Ao enviar com sucesso pela rota principal, o motor emite webhook `message.sent` para a URL configurada em `WEBHOOK_URL`.
+
 ## 5. Webhooks
 
 O Motor emite requisições POST para a URL configurada em `WEBHOOK_URL` contendo um JSON padrão.

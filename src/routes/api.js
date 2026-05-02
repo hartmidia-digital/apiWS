@@ -12,6 +12,7 @@ const ActivityLog = require('../models/ActivityLog');
 // Security: csurf removed (deprecated) - use modern CSRF protection if needed
 
 const { sendLimiter } = require('../utils/haxisLimiter');
+const { sendWebhook } = require('../utils/webhookHaxis');
 const router = express.Router();
 
 const webhookUrls = new Map();
@@ -121,6 +122,20 @@ function initializeApi(sessions, sessionTokens, createSession, getSessionsDetail
         }
 
         return res.status(403).json({ status: 'error', message: 'Invalid token' });
+    };
+
+    const validateTokenOrSession = (req, res, next) => {
+        if (req.session && req.session.adminAuthed) {
+            return next();
+        }
+
+        return validateToken(req, res, next);
+    };
+
+    const normalizeIndividualRecipient = (to) => {
+        const raw = String(to || '').replace(/@s\.whatsapp\.net$/i, '');
+
+        return raw.replace(/\D/g, '');
     };
 
     // Unprotected routes
@@ -1009,8 +1024,8 @@ function initializeApi(sessions, sessionTokens, createSession, getSessionsDetail
         res.json(debugInfo);
     });
 
-    // All routes below this are protected by token
-    router.use(validateToken);
+    // All routes below this are protected by bearer token or authenticated admin session.
+    router.use(validateTokenOrSession);
 
     router.delete('/sessions/:sessionId', async (req, res) => {
         log('API request', 'SYSTEM', { event: 'api-request', method: req.method, endpoint: req.originalUrl, params: req.params });
@@ -1140,7 +1155,7 @@ function initializeApi(sessions, sessionTokens, createSession, getSessionsDetail
                 results.push({ status: 'error', message: 'Invalid message format. "to" and "type" are required.' });
                 continue;
             }
-            if (!validator.isNumeric(to) && !to.endsWith('@g.us')) {
+            if (!validator.isNumeric(String(to)) && !String(to).endsWith('@g.us') && !String(to).endsWith('@s.whatsapp.net')) {
                 results.push({ status: 'error', message: 'Invalid recipient format.' });
                 continue;
             }
@@ -1196,7 +1211,7 @@ function initializeApi(sessions, sessionTokens, createSession, getSessionsDetail
             if (recipient_type === 'group') {
                 destination = to.endsWith('@g.us') ? to : `${to}@g.us`;
             } else {
-                destination = `${to.replace(/[@s.whatsapp.net]/g, '')}@s.whatsapp.net`;
+                destination = `${normalizeIndividualRecipient(to)}@s.whatsapp.net`;
             }
 
             let messagePayload;
@@ -1234,7 +1249,23 @@ function initializeApi(sessions, sessionTokens, createSession, getSessionsDetail
                 const result = await sendMessage(session.sock, destination, messagePayload);
                 results.push(result);
 
+                if (result.status === 'success') {
+                    sendWebhook('message.sent', sessionId, {
+                        key: {
+                            remoteJid: destination,
+                            id: result.messageId,
+                            fromMe: true
+                        },
+                        message: messagePayload,
+                        status: 'SENT'
+                    });
+                }
+
             } catch (error) {
+                sendWebhook('message.error', sessionId, {
+                    destination,
+                    error: error.message
+                });
                 results.push({ status: 'error', message: `Failed to process message for ${to}: ${error.message}` });
             }
         }
