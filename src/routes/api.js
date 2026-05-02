@@ -94,6 +94,13 @@ function initializeApi(sessions, sessionTokens, createSession, getSessionsDetail
     router.use(apiLimiter);
 
     const validateToken = (req, res, next) => {
+        const masterKey = req.headers['x-master-key'];
+        const requiredMasterKey = process.env.MASTER_API_KEY;
+
+        if (requiredMasterKey && masterKey === requiredMasterKey) {
+            return next();
+        }
+
         const authHeader = req.headers['authorization'];
         const token = authHeader && authHeader.split(' ')[1];
 
