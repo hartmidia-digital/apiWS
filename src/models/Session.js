@@ -7,9 +7,9 @@
 const { db } = require('../config/database');
 const crypto = require('crypto');
 const fs = require('fs');
-const path = require('path');
+const haxisPaths = require('../config/paths');
 
-const SESSION_DIR = path.join(process.cwd(), 'auth_info_baileys');
+const SESSION_DIR = haxisPaths.authInfo;
 
 class Session {
     /**

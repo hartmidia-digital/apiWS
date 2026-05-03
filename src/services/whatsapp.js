@@ -21,6 +21,7 @@ const axios = require('axios');
 const FormData = require('form-data');
 const Session = require('../models/Session');
 const ActivityLog = require('../models/ActivityLog');
+const haxisPaths = require('../config/paths');
 
 // Logger configuration
 const defaultLogLevel = "info";
@@ -31,7 +32,7 @@ const activeSockets = new Map();
 const retryCounters = new Map();
 
 // Auth directory
-const AUTH_DIR = path.join(__dirname, '../../auth_info_baileys');
+const AUTH_DIR = haxisPaths.authInfo;
 
 const MEDIA_TYPE_MAP = {
     imageMessage: { type: 'image', extension: 'jpg' },

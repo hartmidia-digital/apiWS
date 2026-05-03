@@ -13,6 +13,8 @@ Variaveis principais:
 - `WEBHOOK_TIMEOUT_MS`: timeout do POST, padrao `5000`.
 - `APIH_MEDIA_UPLOAD_URL`: endpoint da ApiH para upload antecipado de midia.
 - `APIH_MEDIA_UPLOAD_TIMEOUT_MS`: timeout do upload de midia.
+- `AUTH_INFO_PATH`: diretorio persistente das credenciais Baileys. O motor usa
+  esse caminho para reconectar sessoes existentes apos restart.
 
 Se `WEBHOOK_URL` estiver vazia, o motor ignora webhooks sem interromper a
 sessao. Falhas no POST sao registradas em log e nao bloqueiam o Baileys.
