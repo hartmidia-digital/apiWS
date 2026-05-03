@@ -287,6 +287,8 @@ app.post('/api/v1/sessions', async (req, res) => {
             });
         }, (id, msg) => {
             sendWebhook('message.received', id, msg);
+        }, (id, eventType, payload) => {
+            sendWebhook(eventType, id, payload);
         });
 
         // Update sessionTokens map
@@ -356,6 +358,8 @@ app.get('/api/v1/sessions/:sessionId/qr', (req, res) => {
         });
         }, (id, msg) => {
             sendWebhook('message.received', id, msg);
+        }, (id, eventType, payload) => {
+            sendWebhook(eventType, id, payload);
         });
 
     return response.success(res, { message: 'QR code generation started' });
@@ -402,6 +406,8 @@ User.ensureAdmin(process.env.ADMIN_DASHBOARD_PASSWORD);
                 });
             }, (id, msg) => {
                 sendWebhook('message.received', id, msg);
+            }, (id, eventType, payload) => {
+                sendWebhook(eventType, id, payload);
             });
         }
     }

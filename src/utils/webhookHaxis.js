@@ -2,46 +2,111 @@ const axios = require('axios');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const pino = require('pino');
+
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
 
+function unwrapMessageContent(message) {
+    let content = message || {};
+
+    for (let i = 0; i < 6; i += 1) {
+        const next = content.ephemeralMessage?.message
+            || content.viewOnceMessage?.message
+            || content.viewOnceMessageV2?.message
+            || content.viewOnceMessageV2Extension?.message
+            || content.documentWithCaptionMessage?.message;
+
+        if (!next) {
+            break;
+        }
+
+        content = next;
+    }
+
+    return content;
+}
+
+function messagePreview(rawPayload) {
+    const content = unwrapMessageContent(rawPayload.message || rawPayload.content || {});
+    const type = Object.keys(content)[0] || 'unknown';
+    const mediaTypes = ['imageMessage', 'videoMessage', 'documentMessage', 'audioMessage', 'stickerMessage'];
+
+    return {
+        from: rawPayload.key?.remoteJid || rawPayload.remoteJid || '',
+        participant: rawPayload.key?.participant || rawPayload.participant || '',
+        pushName: rawPayload.pushName || '',
+        messageId: rawPayload.key?.id || rawPayload.id || '',
+        type,
+        text: content.conversation
+            || content.extendedTextMessage?.text
+            || content.imageMessage?.caption
+            || content.videoMessage?.caption
+            || content.documentMessage?.caption
+            || content.documentMessage?.fileName
+            || content.eventMessage?.name
+            || content.locationMessage?.name
+            || content.locationMessage?.address
+            || null,
+        hasMedia: mediaTypes.includes(type),
+        hasLocation: type === 'locationMessage' || type === 'liveLocationMessage'
+    };
+}
+
+function statusPreview(eventType, rawPayload) {
+    return {
+        to: rawPayload.key?.remoteJid || rawPayload.remoteJid || '',
+        participant: rawPayload.key?.participant || rawPayload.participant || '',
+        messageId: rawPayload.key?.id || rawPayload.messageId || rawPayload.id || '',
+        status: rawPayload.update?.status || rawPayload.status || eventType
+    };
+}
+
 /**
- * Normaliza o preview do evento
+ * Normaliza um resumo pequeno para consulta e auditoria na ApiH.
  * @param {string} eventType
  * @param {any} rawPayload
  * @returns {object}
  */
-function normalizePreview(eventType, rawPayload) {
-    // Implementar a normalização básica
-    let preview = {};
-
+function normalizePreview(eventType, rawPayload = {}) {
     if (eventType === 'session.status' || eventType.startsWith('session.')) {
-        preview = {
+        return {
             status: rawPayload.status || rawPayload.state || 'unknown',
-            reason: rawPayload.reason || ''
-        };
-    } else if (eventType === 'message.received') {
-        const msg = rawPayload.message;
-        preview = {
-            from: rawPayload.key?.remoteJid || '',
-            pushName: rawPayload.pushName || '',
-            text: msg?.conversation || msg?.extendedTextMessage?.text || '[media/other]',
-            hasMedia: !!(msg?.imageMessage || msg?.videoMessage || msg?.documentMessage || msg?.audioMessage)
-        };
-    } else if (eventType === 'message.sent' || eventType === 'message.status') {
-         preview = {
-            to: rawPayload.key?.remoteJid || '',
-            status: rawPayload.status || ''
+            reason: rawPayload.reason || rawPayload.detail || ''
         };
     }
 
-    return preview;
+    if (eventType === 'message.received') {
+        return messagePreview(rawPayload);
+    }
+
+    if (['message.sent', 'message.status', 'message.error', 'message.deleted', 'message.edited'].includes(eventType)) {
+        return statusPreview(eventType, rawPayload);
+    }
+
+    if (eventType === 'group.update' || eventType === 'group.participants.update') {
+        return {
+            groupId: rawPayload.id || rawPayload.jid || rawPayload.groupId || '',
+            subject: rawPayload.subject || rawPayload.name || '',
+            action: rawPayload.action || rawPayload.event || eventType,
+            participants: rawPayload.participants || []
+        };
+    }
+
+    if (eventType === 'contact.update') {
+        return {
+            jid: rawPayload.id || rawPayload.jid || '',
+            name: rawPayload.name || rawPayload.notify || rawPayload.verifiedName || '',
+            hasAvatar: Boolean(rawPayload.avatarUrl || rawPayload.imgUrl || rawPayload.profilePictureUrl)
+        };
+    }
+
+    return {};
 }
 
 /**
- * Envia o webhook para a API limpa do HAXIS
+ * Envia o webhook para a API limpa do HAXIS.
  * @param {string} eventType
  * @param {string} engineSessionId
  * @param {any} rawPayload
@@ -61,7 +126,7 @@ async function sendWebhook(eventType, engineSessionId, rawPayload) {
     };
 
     const payloadString = JSON.stringify(payload);
-    let headers = {
+    const headers = {
         'Content-Type': 'application/json',
         'X-Haxis-Event-Id': payload.event_id,
         'X-Haxis-Event-Type': payload.event_type,
@@ -69,21 +134,19 @@ async function sendWebhook(eventType, engineSessionId, rawPayload) {
     };
 
     if (WEBHOOK_SECRET) {
-        const signature = crypto.createHmac('sha256', WEBHOOK_SECRET)
+        headers['X-Haxis-Signature'] = crypto.createHmac('sha256', WEBHOOK_SECRET)
             .update(payloadString)
             .digest('hex');
-        headers['X-Haxis-Signature'] = signature;
     }
 
-    const timeoutMs = parseInt(process.env.WEBHOOK_TIMEOUT_MS) || 5000;
+    const timeoutMs = parseInt(process.env.WEBHOOK_TIMEOUT_MS || '5000', 10);
 
     try {
-        // Fire-and-forget: não bloquear execução aguardando retorno
         axios.post(WEBHOOK_URL, payloadString, {
             headers,
             timeout: timeoutMs
         }).then(() => {
-            logger.debug(`Webhook enviado: ${eventType} para sessão ${engineSessionId}`);
+            logger.debug(`Webhook enviado: ${eventType} para sessao ${engineSessionId}`);
         }).catch(error => {
             logger.error(`Falha ao enviar webhook ${eventType}: ${error.message}`);
         });
@@ -93,5 +156,6 @@ async function sendWebhook(eventType, engineSessionId, rawPayload) {
 }
 
 module.exports = {
-    sendWebhook
+    sendWebhook,
+    normalizePreview
 };

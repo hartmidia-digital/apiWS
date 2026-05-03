@@ -55,9 +55,10 @@ function ensureAuthDir() {
  * @param {string} sessionId - Session ID
  * @param {function} onUpdate - Callback for status updates
  * @param {function} onMessage - Callback for incoming messages
+ * @param {function} onEvent - Callback for non-message WhatsApp events
  * @returns {object} Socket connection
  */
-async function connect(sessionId, onUpdate, onMessage) {
+async function connect(sessionId, onUpdate, onMessage, onEvent) {
     if (!require('../utils/validation').isValidId(sessionId)) {
         throw new Error('Invalid session ID');
     }
@@ -112,6 +113,12 @@ async function connect(sessionId, onUpdate, onMessage) {
     // Store socket reference
     activeSockets.set(sessionId, sock);
 
+    const emitEvent = (eventType, payload) => {
+        if (onEvent) {
+            onEvent(sessionId, eventType, payload);
+        }
+    };
+
     // Handle credentials update
     sock.ev.on('creds.update', saveCreds);
 
@@ -155,7 +162,7 @@ async function connect(sessionId, onUpdate, onMessage) {
 
                 if (retryCount <= 5) {
                     console.log(`[${sessionId}] Reconnecting... (attempt ${retryCount})`);
-                    setTimeout(() => connect(sessionId, onUpdate, onMessage), 5000);
+                    setTimeout(() => connect(sessionId, onUpdate, onMessage, onEvent), 5000);
                 } else {
                     console.log(`[${sessionId}] Max retries reached`);
                     retryCounters.delete(sessionId);
@@ -177,13 +184,48 @@ async function connect(sessionId, onUpdate, onMessage) {
     // Handle incoming messages
     if (onMessage) {
         sock.ev.on('messages.upsert', async (m) => {
-            const msg = m.messages[0];
-            if (msg.message) {
+            for (const msg of m.messages || []) {
+                if (!msg.message) {
+                    continue;
+                }
+
                 await attachMediaAsset(sock, msg);
                 onMessage(sessionId, msg);
             }
         });
     }
+
+    sock.ev.on('messages.update', (updates) => {
+        for (const update of updates || []) {
+            emitEvent(messageUpdateEventType(update), update);
+        }
+    });
+
+    sock.ev.on('messages.delete', (item) => {
+        emitEvent('message.deleted', item);
+    });
+
+    sock.ev.on('message-receipt.update', (updates) => {
+        for (const update of updates || []) {
+            emitEvent('message.status', update);
+        }
+    });
+
+    sock.ev.on('contacts.update', (updates) => {
+        for (const update of updates || []) {
+            emitEvent('contact.update', update);
+        }
+    });
+
+    sock.ev.on('groups.update', (updates) => {
+        for (const update of updates || []) {
+            emitEvent('group.update', update);
+        }
+    });
+
+    sock.ev.on('group-participants.update', (update) => {
+        emitEvent('group.participants.update', update);
+    });
 
     return sock;
 }
@@ -247,6 +289,21 @@ function getActiveSessions() {
     return activeSockets;
 }
 
+function messageUpdateEventType(update) {
+    const protocolMessage = update?.update?.message?.protocolMessage || update?.message?.protocolMessage;
+    const protocolType = String(protocolMessage?.type ?? '').toUpperCase();
+
+    if (protocolMessage?.editedMessage) {
+        return 'message.edited';
+    }
+
+    if (protocolMessage?.key && (protocolType === '0' || protocolType.includes('REVOKE') || protocolType.includes('DELETE'))) {
+        return 'message.deleted';
+    }
+
+    return 'message.status';
+}
+
 function unwrapMessageContent(message) {
     let content = message;
 
@@ -260,6 +317,14 @@ function unwrapMessageContent(message) {
 
     if (content?.viewOnceMessageV2?.message) {
         content = content.viewOnceMessageV2.message;
+    }
+
+    if (content?.viewOnceMessageV2Extension?.message) {
+        content = content.viewOnceMessageV2Extension.message;
+    }
+
+    if (content?.documentWithCaptionMessage?.message) {
+        content = content.documentWithCaptionMessage.message;
     }
 
     return content;
