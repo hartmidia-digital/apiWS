@@ -186,7 +186,7 @@ async function connect(sessionId, onUpdate, onMessage, onEvent) {
     if (onMessage) {
         sock.ev.on('messages.upsert', async (m) => {
             for (const msg of m.messages || []) {
-                if (!msg.message) {
+                if (!msg.message || isStatusBroadcastMessage(msg)) {
                     continue;
                 }
 
@@ -198,16 +198,28 @@ async function connect(sessionId, onUpdate, onMessage, onEvent) {
 
     sock.ev.on('messages.update', (updates) => {
         for (const update of updates || []) {
+            if (isStatusBroadcastMessage(update)) {
+                continue;
+            }
+
             emitEvent(messageUpdateEventType(update), update);
         }
     });
 
     sock.ev.on('messages.delete', (item) => {
+        if (isStatusBroadcastMessage(item)) {
+            return;
+        }
+
         emitEvent('message.deleted', item);
     });
 
     sock.ev.on('message-receipt.update', (updates) => {
         for (const update of updates || []) {
+            if (isStatusBroadcastMessage(update)) {
+                continue;
+            }
+
             emitEvent('message.status', update);
         }
     });
@@ -303,6 +315,15 @@ function messageUpdateEventType(update) {
     }
 
     return 'message.status';
+}
+
+function isStatusBroadcastMessage(payload) {
+    const remoteJid = payload?.key?.remoteJid
+        || payload?.message?.key?.remoteJid
+        || payload?.update?.key?.remoteJid
+        || payload?.remoteJid;
+
+    return typeof remoteJid === 'string' && remoteJid.startsWith('status@broadcast');
 }
 
 function unwrapMessageContent(message) {

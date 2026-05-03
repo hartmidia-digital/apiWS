@@ -84,6 +84,10 @@ Tipos de conteudo esperados no payload:
   `viewOnceMessageV2`, `viewOnceMessageV2Extension` e
   `documentWithCaptionMessage`
 
+Mensagens de `status@broadcast` sao descartadas no motor antes do upload de
+midia e antes do webhook. O motor nao envia conteudo nem arquivos de status de
+perfil para a ApiH.
+
 ### `message.status`
 
 Emitido a partir de `messages.update` e `message-receipt.update` quando ha
@@ -134,3 +138,26 @@ O motor tenta anexar `mediaAssetId` antes do webhook para:
 
 Se o upload antecipado falhar, a mensagem ainda e enviada. A ApiH pode fazer
 fallback chamando o endpoint de download do motor por `sessionId` e `messageId`.
+
+## Envio de anexos pela ApiH
+
+`POST /api/v1/messages?sessionId={session}` aceita:
+
+- `text`
+- `image`
+- `video`
+- `audio`
+- `document`
+
+Para anexos, a ApiH envia links publicos da sua propria rota `/media/{id}`. O
+apiWS entrega esse link ao Baileys como `url`.
+
+## Metadados auxiliares para backfill
+
+Endpoints protegidos por token/master key:
+
+- `GET /api/v1/sessions/{sessionId}/contacts/{jid}/profile-picture`
+- `GET /api/v1/sessions/{sessionId}/groups/{groupJid}/metadata`
+
+Eles sao usados pela ApiH para preencher avatars e nomes de grupos em mensagens
+ja existentes.

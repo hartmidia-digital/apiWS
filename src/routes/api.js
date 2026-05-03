@@ -25,6 +25,8 @@ const mediaDir = path.join(__dirname, '../../media');
 // Allowed MIME types for file uploads
 const ALLOWED_MIME_TYPES = [
     'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+    'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/ogg', 'audio/opus', 'audio/wav', 'audio/webm',
+    'video/mp4', 'video/webm', 'video/quicktime',
     'application/pdf', 'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel',
@@ -46,7 +48,7 @@ const fileFilter = (req, file, cb) => {
     if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error('Invalid file type. Allowed: JPEG, PNG, GIF, WebP, PDF, DOC, DOCX, XLS, XLSX.'), false);
+        cb(new Error('Invalid file type. Allowed: images, audio, video, PDF, DOC, DOCX, XLS, XLSX.'), false);
     }
 };
 
@@ -142,6 +144,26 @@ function initializeApi(sessions, sessionTokens, createSession, getSessionsDetail
         const raw = String(to || '').replace(/@s\.whatsapp\.net$/i, '');
 
         return raw.replace(/\D/g, '');
+    };
+
+    const isStatusBroadcastJid = (jid) => typeof jid === 'string' && jid.startsWith('status@broadcast');
+
+    const normalizeDestination = (recipientType, to) => {
+        const rawTo = String(to || '');
+
+        if (isStatusBroadcastJid(rawTo)) {
+            throw new Error('Status/profile broadcast messages are not supported.');
+        }
+
+        if (recipientType === 'group') {
+            return rawTo.endsWith('@g.us') ? rawTo : `${rawTo}@g.us`;
+        }
+
+        if (rawTo.endsWith('@lid') || rawTo.endsWith('@s.whatsapp.net')) {
+            return rawTo;
+        }
+
+        return `${normalizeIndividualRecipient(rawTo)}@s.whatsapp.net`;
     };
 
     // Unprotected routes
@@ -1033,6 +1055,48 @@ function initializeApi(sessions, sessionTokens, createSession, getSessionsDetail
     // All routes below this are protected by bearer token or authenticated admin session.
     router.use(validateTokenOrSession);
 
+    router.get('/sessions/:sessionId/contacts/:jid/profile-picture', async (req, res) => {
+        const { sessionId, jid } = req.params;
+        const decodedJid = decodeURIComponent(jid);
+
+        if (isStatusBroadcastJid(decodedJid)) {
+            return res.status(204).send();
+        }
+
+        const session = sessions.get(sessionId);
+        if (!session || !session.sock || session.status !== 'CONNECTED') {
+            return res.status(404).json({ status: 'error', message: `Session ${sessionId} not found or not connected.` });
+        }
+
+        try {
+            const url = await session.sock.profilePictureUrl(decodedJid, 'image');
+            res.json({ status: 'success', data: { jid: decodedJid, url } });
+        } catch (error) {
+            res.status(404).json({ status: 'error', message: `Profile picture not found for ${decodedJid}` });
+        }
+    });
+
+    router.get('/sessions/:sessionId/groups/:groupJid/metadata', async (req, res) => {
+        const { sessionId, groupJid } = req.params;
+        const decodedGroupJid = decodeURIComponent(groupJid);
+
+        if (!decodedGroupJid.endsWith('@g.us')) {
+            return res.status(400).json({ status: 'error', message: 'Invalid group JID.' });
+        }
+
+        const session = sessions.get(sessionId);
+        if (!session || !session.sock || session.status !== 'CONNECTED') {
+            return res.status(404).json({ status: 'error', message: `Session ${sessionId} not found or not connected.` });
+        }
+
+        try {
+            const metadata = await session.sock.groupMetadata(decodedGroupJid);
+            res.json({ status: 'success', data: metadata });
+        } catch (error) {
+            res.status(404).json({ status: 'error', message: `Group metadata not found for ${decodedGroupJid}` });
+        }
+    });
+
     router.delete('/sessions/:sessionId', async (req, res) => {
         log('API request', 'SYSTEM', { event: 'api-request', method: req.method, endpoint: req.originalUrl, params: req.params });
         const { sessionId } = req.params;
@@ -1124,7 +1188,7 @@ function initializeApi(sessions, sessionTokens, createSession, getSessionsDetail
         log('API request', 'SYSTEM', { event: 'api-request', method: req.method, endpoint: req.originalUrl, body: req.body });
         if (!req.file) {
             log('API error', 'SYSTEM', { event: 'api-error', error: 'No file uploaded or invalid file type.', endpoint: req.originalUrl });
-            return res.status(400).json({ status: 'error', message: 'No file uploaded or invalid file type. Allowed: JPEG, PNG, GIF, WebP, PDF, DOC, DOCX, XLS, XLSX. Max size: 25MB.' });
+            return res.status(400).json({ status: 'error', message: 'No file uploaded or invalid file type. Allowed: images, audio, video, PDF, DOC, DOCX, XLS, XLSX. Max size: 25MB.' });
         }
         const mediaId = req.file.filename;
         log('File uploaded', mediaId, { event: 'file-uploaded', mediaId });
@@ -1155,13 +1219,17 @@ function initializeApi(sessions, sessionTokens, createSession, getSessionsDetail
         const messageContents = []; // Track message contents with formatting
 
         for (const msg of messages) {
-            const { recipient_type, to, type, text, image, document } = msg;
+            const { recipient_type, to, type, text, image, video, audio, document } = msg;
             // Input validation
             if (!to || !type) {
                 results.push({ status: 'error', message: 'Invalid message format. "to" and "type" are required.' });
                 continue;
             }
-            if (!validator.isNumeric(String(to)) && !String(to).endsWith('@g.us') && !String(to).endsWith('@s.whatsapp.net')) {
+            if (isStatusBroadcastJid(String(to))) {
+                results.push({ status: 'error', message: 'Status/profile broadcast messages are not supported.' });
+                continue;
+            }
+            if (!validator.isNumeric(String(to)) && !String(to).endsWith('@g.us') && !String(to).endsWith('@s.whatsapp.net') && !String(to).endsWith('@lid')) {
                 results.push({ status: 'error', message: 'Invalid recipient format.' });
                 continue;
             }
@@ -1196,6 +1264,33 @@ function initializeApi(sessions, sessionTokens, createSession, getSessionsDetail
                     url: image.link || `/media/${image.id}` // Convert media ID to URL for display
                 };
             }
+            if (type === 'video' && video) {
+                if (video.id && !validator.isAlphanumeric(video.id.replace(/[\.\-]/g, ''))) {
+                    results.push({ status: 'error', message: 'Invalid video ID.' });
+                    continue;
+                }
+                if (video.link && !validator.isURL(video.link)) {
+                    results.push({ status: 'error', message: 'Invalid video URL.' });
+                    continue;
+                }
+                messageContent.video = {
+                    caption: video.caption || '',
+                    url: video.link || `/media/${video.id}`
+                };
+            }
+            if (type === 'audio' && audio) {
+                if (audio.id && !validator.isAlphanumeric(audio.id.replace(/[\.\-]/g, ''))) {
+                    results.push({ status: 'error', message: 'Invalid audio ID.' });
+                    continue;
+                }
+                if (audio.link && !validator.isURL(audio.link)) {
+                    results.push({ status: 'error', message: 'Invalid audio URL.' });
+                    continue;
+                }
+                messageContent.audio = {
+                    url: audio.link || `/media/${audio.id}`
+                };
+            }
             if (type === 'document' && document) {
                 if (document.id && !validator.isAlphanumeric(document.id.replace(/[\.\-]/g, ''))) {
                     results.push({ status: 'error', message: 'Invalid document ID.' });
@@ -1214,10 +1309,11 @@ function initializeApi(sessions, sessionTokens, createSession, getSessionsDetail
             messageContents.push(messageContent);
 
             let destination;
-            if (recipient_type === 'group') {
-                destination = to.endsWith('@g.us') ? to : `${to}@g.us`;
-            } else {
-                destination = `${normalizeIndividualRecipient(to)}@s.whatsapp.net`;
+            try {
+                destination = normalizeDestination(recipient_type, to);
+            } catch (error) {
+                results.push({ status: 'error', message: error.message });
+                continue;
             }
 
             let messagePayload;
@@ -1238,6 +1334,22 @@ function initializeApi(sessions, sessionTokens, createSession, getSessionsDetail
                         }
                         const imageUrl = image.id ? path.join(mediaDir, image.id) : image.link;
                         messagePayload = { image: { url: imageUrl }, caption: image.caption };
+                        break;
+
+                    case 'video':
+                        if (!video || (!video.link && !video.id)) {
+                            throw new Error('For "video" type, "video.link" or "video.id" is required.');
+                        }
+                        const videoUrl = video.id ? path.join(mediaDir, video.id) : video.link;
+                        messagePayload = { video: { url: videoUrl }, caption: video.caption, mimetype: video.mimetype };
+                        break;
+
+                    case 'audio':
+                        if (!audio || (!audio.link && !audio.id)) {
+                            throw new Error('For "audio" type, "audio.link" or "audio.id" is required.');
+                        }
+                        const audioUrl = audio.id ? path.join(mediaDir, audio.id) : audio.link;
+                        messagePayload = { audio: { url: audioUrl }, mimetype: audio.mimetype || 'audio/mpeg' };
                         break;
 
                     case 'document':
