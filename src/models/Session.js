@@ -7,6 +7,7 @@
 const { db } = require('../config/database');
 const crypto = require('crypto');
 const fs = require('fs');
+const path = require('path');
 const haxisPaths = require('../config/paths');
 
 const SESSION_DIR = haxisPaths.authInfo;
