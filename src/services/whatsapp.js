@@ -11,11 +11,14 @@ const {
     makeCacheableSignalKeyStore,
     isJidBroadcast,
     Browsers,
-    DisconnectReason
+    DisconnectReason,
+    downloadMediaMessage
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const path = require('path');
 const fs = require('fs');
+const axios = require('axios');
+const FormData = require('form-data');
 const Session = require('../models/Session');
 const ActivityLog = require('../models/ActivityLog');
 
@@ -29,6 +32,14 @@ const retryCounters = new Map();
 
 // Auth directory
 const AUTH_DIR = path.join(__dirname, '../../auth_info_baileys');
+
+const MEDIA_TYPE_MAP = {
+    imageMessage: { type: 'image', extension: 'jpg' },
+    videoMessage: { type: 'video', extension: 'mp4' },
+    audioMessage: { type: 'audio', extension: 'ogg' },
+    documentMessage: { type: 'document', extension: 'bin' },
+    stickerMessage: { type: 'image', extension: 'webp' }
+};
 
 /**
  * Ensure auth directory exists
@@ -165,9 +176,10 @@ async function connect(sessionId, onUpdate, onMessage) {
 
     // Handle incoming messages
     if (onMessage) {
-        sock.ev.on('messages.upsert', async (m) => { console.log('[DEBUG] Message Object:', JSON.stringify(m.messages[0]));
+        sock.ev.on('messages.upsert', async (m) => {
             const msg = m.messages[0];
             if (msg.message) {
+                await attachMediaAsset(sock, msg);
                 onMessage(sessionId, msg);
             }
         });
@@ -233,6 +245,88 @@ function deleteSessionData(sessionId) {
  */
 function getActiveSessions() {
     return activeSockets;
+}
+
+function unwrapMessageContent(message) {
+    let content = message;
+
+    if (content?.ephemeralMessage?.message) {
+        content = content.ephemeralMessage.message;
+    }
+
+    if (content?.viewOnceMessage?.message) {
+        content = content.viewOnceMessage.message;
+    }
+
+    if (content?.viewOnceMessageV2?.message) {
+        content = content.viewOnceMessageV2.message;
+    }
+
+    return content;
+}
+
+function inferDocumentExtension(content) {
+    const fileName = content?.documentMessage?.fileName;
+
+    if (fileName && path.extname(fileName)) {
+        return path.extname(fileName).replace('.', '').toLowerCase();
+    }
+
+    const mimeType = content?.documentMessage?.mimetype;
+    const mimeMap = {
+        'application/pdf': 'pdf',
+        'application/msword': 'doc',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+        'application/vnd.ms-excel': 'xls',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx'
+    };
+
+    return mimeMap[mimeType] || 'bin';
+}
+
+async function uploadMediaToApih(buffer, type, fileName) {
+    const uploadUrl = process.env.APIH_MEDIA_UPLOAD_URL || 'https://apih.hartmidia.com/api/v1/media/upload';
+    const form = new FormData();
+
+    form.append('file', buffer, { filename: fileName });
+    form.append('type', type);
+
+    const response = await axios.post(uploadUrl, form, {
+        headers: form.getHeaders(),
+        timeout: parseInt(process.env.APIH_MEDIA_UPLOAD_TIMEOUT_MS || '15000', 10),
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity
+    });
+
+    return response.data;
+}
+
+async function attachMediaAsset(sock, msg) {
+    const content = unwrapMessageContent(msg.message);
+    const messageType = content ? Object.keys(content)[0] : null;
+    const mediaConfig = MEDIA_TYPE_MAP[messageType];
+
+    if (!mediaConfig) {
+        return;
+    }
+
+    try {
+        const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger });
+        const extension = messageType === 'documentMessage'
+            ? inferDocumentExtension(content)
+            : mediaConfig.extension;
+        const asset = await uploadMediaToApih(buffer, mediaConfig.type, `whatsapp-${msg.key?.id || Date.now()}.${extension}`);
+
+        if (asset?.id) {
+            msg.mediaAssetId = asset.id;
+        }
+    } catch (error) {
+        logger.error({
+            messageId: msg.key?.id,
+            mediaType: messageType,
+            error: error.response?.data || error.message
+        }, '[HAXIS] Media upload to ApiH failed');
+    }
 }
 
 module.exports = {

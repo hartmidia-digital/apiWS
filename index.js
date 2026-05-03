@@ -51,7 +51,7 @@ if (!ENCRYPTION_KEY || !isValidKey(ENCRYPTION_KEY)) {
 
 // Initialize Express
 const app = express();
-app.set('trust proxy', true);
+app.set('trust proxy', 'loopback');
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
@@ -95,7 +95,7 @@ app.use(rateLimit({
     message: { status: 'error', message: 'Too many requests' },
     standardHeaders: true,
     legacyHeaders: false,
-    validate: { trustProxy: true }
+    validate: { trustProxy: false }
 }));
 
 app.use(session({
