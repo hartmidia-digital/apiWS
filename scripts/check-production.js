@@ -8,7 +8,8 @@ const REQUIRED_ENVS = [
     'ADMIN_DASHBOARD_PASSWORD',
     'MASTER_API_KEY',
     'TOKEN_ENCRYPTION_KEY',
-    'SESSION_SECRET'
+    'SESSION_SECRET',
+    'APIWS_ENGINE_ID'
 ];
 
 let hasErrors = false;

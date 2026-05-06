@@ -25,13 +25,16 @@ O APIH do outro lado deve ler o body e recriar o hash HMAC-SHA256 usando o mesmo
 - `X-Haxis-Signature`: A assinatura gerada (`crypto.createHmac('sha256', WEBHOOK_SECRET).update(payloadString).digest('hex')`).
 
 ## 5. Payloads
-O Payload enviado em JSON tenta enviar a formatação bruta do Baileys e um resumo simplificado.
+O Payload enviado em JSON tenta enviar a formatação bruta do Baileys e um resumo simplificado. Em novas arquiteturas de multi-instalação da ApiWS, também adicionamos a identificação de origem (`engine_id` e `engine_base_url`), permitindo que a APIH resolva corretamente de que servidor esta sessão pertence.
+*(Para aprofundamento, leia [Integração HAXIS APIH: Identidade Operacional e Engine ID](./integracao-apih-engine-id.md))*
 
 **Exemplo Fictício (Anonimizado) de `message.received`:**
 ```json
 {
   "event_id": "550e8400-e29b-41d4-a716-446655440000",
   "event_type": "message.received",
+  "engine_id": "apiws.hartmidia.com",
+  "engine_base_url": "https://apiws.hartmidia.com",
   "engine_session_id": "sessao_haxis_01",
   "timestamp": "2026-05-03T10:00:00.000Z",
   "raw_payload": {

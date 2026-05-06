@@ -41,6 +41,7 @@ Aqui documentamos tudo sobre a aplicação cujo papel é conectar, persistir e g
 
 ### Webhooks
 - `[Oficial]` [Webhooks ApiWS para APIH](webhooks/webhooks-apiws-para-apih.md)
+- `[Oficial]` [Integração HAXIS APIH: Identidade Operacional e Engine ID](webhooks/integracao-apih-engine-id.md)
 
 ### Deploy
 - `[Oficial]` [Deploy de Produção ApiWS](deploy/deploy-producao-apiws.md)

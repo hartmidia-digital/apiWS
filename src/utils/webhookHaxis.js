@@ -7,6 +7,8 @@ const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+const ENGINE_ID = process.env.APIWS_ENGINE_ID;
+const ENGINE_BASE_URL = process.env.APIWS_PUBLIC_URL || null;
 
 function unwrapMessageContent(message) {
     let content = message || {};
@@ -119,6 +121,8 @@ async function sendWebhook(eventType, engineSessionId, rawPayload) {
     const payload = {
         event_id: uuidv4(),
         event_type: eventType,
+        engine_id: ENGINE_ID,
+        engine_base_url: ENGINE_BASE_URL,
         engine_session_id: engineSessionId,
         timestamp: new Date().toISOString(),
         raw_payload: rawPayload,
