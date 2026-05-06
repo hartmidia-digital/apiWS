@@ -13,6 +13,7 @@ A fonte de verdade técnica, operacional e arquitetural deste projeto foi audita
 - **[Operação de Sessão](docs/operacao/operacao-sessoes-whatsapp-apiws.md)**: Como agir para resetar e checar saúdes de QRs Code.
 - **[Deploy Produção](docs/deploy/deploy-producao-apiws.md)**: O processo de envio contínuo para o painel cPanel via `.cpanel.yml`.
 - **[Webhooks ApiWS → APIH](docs/webhooks/webhooks-apiws-para-apih.md)**: Os headers e contratos entre o Motor e o Gateways (APIH).
+- **[Identidade e Engine ID](docs/webhooks/integracao-apih-engine-id.md)**: Variáveis `APIWS_ENGINE_ID` e `APIWS_PUBLIC_URL` para múltiplos nós em produção.
 - **[Segurança](docs/seguranca/seguranca-apiws.md)**: A proteção via `MASTER_API_KEY` e encriptação AES.
 - **[Relatório de Consistência](docs/auditorias/relatorio-consistencia-documentacao-codigo-apiws.md)**: Estado atual e análise entre o que o código faz e o que a doc afirma.
 

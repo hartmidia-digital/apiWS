@@ -4,7 +4,17 @@ Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 
 ## [Não lançado]
 
+### Funcionalidades
+- adicionado envio de `engine_id` nos webhooks para APIH;
+- adicionado envio de `engine_base_url` nos webhooks para APIH;
+- adicionadas variáveis `APIWS_ENGINE_ID` e `APIWS_PUBLIC_URL`;
+- HMAC continua assinando o payload completo.
+
+### Segurança / Operacional
+- inicialização bloqueada em produção caso falte `APIWS_ENGINE_ID` (impede processamento silencioso e inseguro);
+
 ### Documentação
+- atualizada documentação em `/docs` sobre Identidade Operacional e regras do webhook (`docs/webhooks/integracao-apih-engine-id.md`).
 - Criada auditoria de consistência entre documentação e código do ApiWS (`docs/auditorias/relatorio-consistencia-documentacao-codigo-apiws.md`).
 - Organizada a nomenclatura da pasta `/docs` usando os padrões exigidos (português do Brasil, kebab-case).
 - Criado índice oficial da documentação do ApiWS (`docs/indice-documentacao-apiws.md`).

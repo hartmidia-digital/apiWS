@@ -49,6 +49,19 @@ if (!ENCRYPTION_KEY || !isValidKey(ENCRYPTION_KEY)) {
     process.exit(1);
 }
 
+// Validação de variáveis obrigatórias para multi-sessões (HAXIS APIH)
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction && !process.env.APIWS_ENGINE_ID) {
+    console.error('FATAL: APIWS_ENGINE_ID é obrigatório em ambiente de produção!');
+    console.error('A apiWS não pode iniciar sem saber a sua própria identidade (engine_id) para informar ao APIH.');
+    console.error('Configure APIWS_ENGINE_ID no arquivo .env (ex: APIWS_ENGINE_ID=apiws.hartmidia.com).');
+    process.exit(1);
+}
+
+if (isProduction && !process.env.APIWS_PUBLIC_URL) {
+    console.warn('AVISO: APIWS_PUBLIC_URL não está configurada. É altamente recomendado definir a URL base pública (ex: https://apiws.hartmidia.com) em produção.');
+}
+
 // Initialize Express
 const app = express();
 app.set('trust proxy', 'loopback');
@@ -59,7 +72,6 @@ const wss = new WebSocketServer({ server });
 const wsClients = new Map();
 
 // Session configuration
-const isProduction = process.env.NODE_ENV === 'production';
 const sessionSecret = process.env.SESSION_SECRET || 'dev-secret-change-me';
 
 if (isProduction && !process.env.SESSION_SECRET) {
