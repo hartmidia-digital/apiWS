@@ -61,7 +61,8 @@ Foi disponibilizado um endpoint público e seguro em `GET /health` que retorna u
 ## 12. Limite de Sessões (MAX_SESSIONS)
 Ao homologar, certifique-se de respeitar a capacidade do seu ambiente em relação à criação de múltiplas sessões do Baileys.
 A variável `MAX_SESSIONS` estipula um teto seguro para evitar sobrecarga (OOM). Por padrão, iniciamos de forma conservadora com `MAX_SESSIONS=5`.
-- Se o número de sessões no banco de dados chegar ou ultrapassar 5, não será possível adicionar mais (a APIWS emitirá uma resposta HTTP 403 com a mensagem "*Limite máximo de sessões atingido. Ajuste MAX_SESSIONS no ambiente se precisar ampliar a capacidade.*").
+- O valor de `MAX_SESSIONS` deve obrigatoriamente ser um número inteiro positivo. Se um valor inválido, negativo, zero ou texto (NaN) for fornecido no `.env`, a aplicação aplicará automaticamente o fallback seguro (`MAX_SESSIONS=5`) e emitirá um log de aviso na inicialização. O limite nunca é desativado silenciosamente.
+- Se o número de sessões no banco de dados chegar ou ultrapassar o limite, não será possível adicionar mais (a APIWS emitirá uma resposta HTTP 403 com a mensagem "*Limite máximo de sessões atingido. Ajuste MAX_SESSIONS no ambiente se precisar ampliar a capacidade.*").
 - Pode ser aumentado depois com monitoramento adequado (via endpoint de healthcheck e análise de log).
 - O limite real de cada instalação depende puramente de RAM, CPU, estabilidade do Baileys, volume de mensagens e mídia transacionada. Cada instalação deve ser monitorada individualmente.
 
