@@ -55,11 +55,22 @@ Se a variável `APIWS_ENGINE_ID` for ignorada em ambientes de produção, existe
 Para combater o risco listado no item acima, o inicializador principal do sistema (`index.js`) implementa um bloqueio forte. **Se a variável `NODE_ENV` for "production" e `APIWS_ENGINE_ID` for vazia, o ApiWS lançará um erro fatal explícito em português no terminal e a aplicação abortará com o código `process.exit(1)`.**
 Isso garante que a aplicação não rodará num estado inconsistente. Por outro lado, `APIWS_PUBLIC_URL` enviará apenas um alerta ou `warn` caso esteja ausente, oferecendo um *fallback* temporário seguro (resultando em `engine_base_url: null`), o qual deve ser corrigido logo depois.
 
-## 11. Checklist de Homologação com APIH
+## 11. Healthcheck e Monitoramento
+Foi disponibilizado um endpoint público e seguro em `GET /health` que retorna um payload JSON contendo o status, app e environment. Recomenda-se o uso deste endpoint para facilitar o deploy e monitoramento da estabilidade do motor na infraestrutura. Nenhuma informação sensível ou segredos são expostos.
+
+## 12. Limite de Sessões (MAX_SESSIONS)
+Ao homologar, certifique-se de respeitar a capacidade do seu ambiente em relação à criação de múltiplas sessões do Baileys.
+A variável `MAX_SESSIONS` estipula um teto seguro para evitar sobrecarga (OOM). Por padrão, iniciamos de forma conservadora com `MAX_SESSIONS=5`.
+- Se o número de sessões no banco de dados chegar ou ultrapassar 5, não será possível adicionar mais (a APIWS emitirá uma resposta HTTP 403 com a mensagem "*Limite máximo de sessões atingido. Ajuste MAX_SESSIONS no ambiente se precisar ampliar a capacidade.*").
+- Pode ser aumentado depois com monitoramento adequado (via endpoint de healthcheck e análise de log).
+- O limite real de cada instalação depende puramente de RAM, CPU, estabilidade do Baileys, volume de mensagens e mídia transacionada. Cada instalação deve ser monitorada individualmente.
+
+## 13. Checklist de Homologação com APIH
 Antes de subir uma nova instalação ou instanciar para múltiplos clientes:
 1. [ ] Garantir que o APIH e o HAXIS Core estão publicados na sua versão que suporta a chave composta (`engine_id` + `engine_session_id`).
-2. [ ] Configurar corretamente o `APIWS_ENGINE_ID` e o `APIWS_PUBLIC_URL` no `.env` do ApiWS.
+2. [ ] Configurar corretamente o `APIWS_ENGINE_ID`, `APIWS_PUBLIC_URL` e `MAX_SESSIONS` (recomendado: `5`) no `.env` do ApiWS.
 3. [ ] Realizar um deploy da apiWS configurada.
-4. [ ] Realizar um teste (disparar evento `message.received`).
-5. [ ] Confirmar no banco de dados e logs do APIH que a *ChannelAccount* foi criada/resolvida corretamente pela identidade dupla.
-6. [ ] Responder à mensagem via HAXIS (outbound) usando a origem correta.
+4. [ ] Consultar o endpoint `GET /health` para verificar a subida do servidor.
+5. [ ] Realizar um teste (disparar evento `message.received`).
+6. [ ] Confirmar no banco de dados e logs do APIH que a *ChannelAccount* foi criada/resolvida corretamente pela identidade dupla.
+7. [ ] Responder à mensagem via HAXIS (outbound) usando a origem correta.

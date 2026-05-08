@@ -11,13 +11,15 @@ A API limpa atua como um "Gateway" entre o Motor e o cliente HAXIS final, isolan
 ## 2. Responsabilidades do Motor (apiWS)
 
 O motor (`api.useb.ws`) é focado exclusivamente em manter conexões persistentes e estáveis com o WhatsApp Web:
-- Gerenciar sessões do WhatsApp (via Baileys).
+- Gerenciar sessões do WhatsApp (via Baileys) e respeitar o limite de `MAX_SESSIONS` (padrão: `5`) configurado para garantir a estabilidade contra sobrecarga (Out Of Memory).
+- Identificar-se perante o Gateway via chave composta (`APIWS_ENGINE_ID` + `APIWS_PUBLIC_URL` e `sessionId`) contida nos webhooks.
 - Gerar QR Codes para autenticação.
 - Persistir o estado da sessão localmente.
 - Enviar mensagens para o WhatsApp.
 - Receber mensagens brutas do WhatsApp.
 - Emitir webhooks não-bloqueantes para o Gateway.
 - Expor uma API interna protegida e um painel técnico isolado.
+- Expor um endpoint de monitoramento de saúde não sensível (`/health`).
 - **Não** ser consumido diretamente pelo HAXIS final.
 
 ## 3. Responsabilidades da API Limpa (Gateway)

@@ -5,7 +5,9 @@ Antes de considerar o deploy na `api.useb.ws` como concluído, execute as seguin
 ## 1. Ambiente, Permissões e Paths Seguros
 - [ ] O repositório foi clonado corretamente em `/home/usebws/api`.
 - [ ] As variáveis de ambiente essenciais (`MASTER_API_KEY`, `ADMIN_DASHBOARD_PASSWORD`, `WEBHOOK_SECRET`, `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY`) foram preenchidas no painel do Node.js App.
+- [ ] As variáveis de multi-instância e limites (`APIWS_ENGINE_ID`, `APIWS_PUBLIC_URL`, `MAX_SESSIONS=5`) foram configuradas.
 - [ ] O banco de dados e arquivos críticos (`auth_info_baileys`) foram criados fora da pasta pública (em `/home/usebws/apiws-data/`).
+- [ ] O endpoint `GET /health` responde corretamente e o log de subida não acusa erros fatais sobre `APIWS_ENGINE_ID`.
 - [ ] Execute `npm run check:production` e confirme que não há erros bloqueantes.
 
 ## 2. Testes de Segurança no Navegador (Obrigatório)

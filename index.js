@@ -152,6 +152,15 @@ function broadcastToClients(data) {
 app.use('/admin', authRoutes);
 app.use('/admin/users', userRoutes);
 
+// Endpoint seguro de verificação de saúde (Healthcheck)
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        app: 'apiws',
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
+
 // Static pages
 app.get('/api-documentation', (req, res) => {
     res.sendFile(path.join(__dirname, 'api_documentation.html'));
@@ -283,6 +292,15 @@ app.post('/api/v1/sessions', async (req, res) => {
     }
 
     try {
+        // Verifica o limite seguro configurado em MAX_SESSIONS
+        const maxSessionsStr = process.env.MAX_SESSIONS || '5';
+        const maxSessions = parseInt(maxSessionsStr, 10);
+        const existingSessionsCount = Session.getAll().length;
+
+        if (existingSessionsCount >= maxSessions) {
+            return response.error(res, 'Limite máximo de sessões atingido. Ajuste MAX_SESSIONS no ambiente se precisar ampliar a capacidade.', 403);
+        }
+
         // Create session in database
         const session = Session.create(sessionId, req.session.userEmail);
 
