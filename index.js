@@ -62,6 +62,18 @@ if (isProduction && !process.env.APIWS_PUBLIC_URL) {
     console.warn('AVISO: APIWS_PUBLIC_URL não está configurada. É altamente recomendado definir a URL base pública (ex: https://apiws.hartmidia.com) em produção.');
 }
 
+// Validação de limite de sessões (MAX_SESSIONS)
+if (process.env.MAX_SESSIONS) {
+    const parsedMaxSessions = parseInt(process.env.MAX_SESSIONS, 10);
+    if (isNaN(parsedMaxSessions) || parsedMaxSessions <= 0) {
+        console.warn('AVISO: MAX_SESSIONS configurado com valor inválido no .env. Deve ser um número inteiro positivo.');
+        console.warn('Aplicando fallback de segurança: MAX_SESSIONS=5.');
+        process.env.MAX_SESSIONS = '5';
+    }
+} else {
+    process.env.MAX_SESSIONS = '5';
+}
+
 // Initialize Express
 const app = express();
 app.set('trust proxy', 'loopback');
@@ -151,6 +163,15 @@ function broadcastToClients(data) {
 // Mount new routes
 app.use('/admin', authRoutes);
 app.use('/admin/users', userRoutes);
+
+// Endpoint seguro de verificação de saúde (Healthcheck)
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        app: 'apiws',
+        environment: process.env.NODE_ENV || 'development'
+    });
+});
 
 // Static pages
 app.get('/api-documentation', (req, res) => {
@@ -283,6 +304,20 @@ app.post('/api/v1/sessions', async (req, res) => {
     }
 
     try {
+        // Verifica o limite seguro configurado em MAX_SESSIONS (com fallback nativo de segurança)
+        const maxSessionsStr = process.env.MAX_SESSIONS || '5';
+        let maxSessions = parseInt(maxSessionsStr, 10);
+
+        if (isNaN(maxSessions) || maxSessions <= 0) {
+            maxSessions = 5;
+        }
+
+        const existingSessionsCount = Session.getAll().length;
+
+        if (existingSessionsCount >= maxSessions) {
+            return response.error(res, 'Limite máximo de sessões atingido. Ajuste MAX_SESSIONS no ambiente se precisar ampliar a capacidade.', 403);
+        }
+
         // Create session in database
         const session = Session.create(sessionId, req.session.userEmail);
 

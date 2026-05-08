@@ -7,6 +7,12 @@ A fonte de verdade técnica, operacional e arquitetural deste projeto foi audita
 👉 **Por favor, antes de operar, codificar ou inspecionar o servidor, inicie a leitura pelo Índice da Documentação Oficial:**
 🔗 **[Ler Documentação Oficial do ApiWS (Acessar o Índice)](docs/indice-documentacao-apiws.md)**
 
+## Configurações e Variáveis Críticas de Ambiente (.env)
+* `APIWS_ENGINE_ID`: Identificador único da instalação (ex: `apiws.hartmidia.com`). Essencial para a identificação perante a APIH. Obrigatório em produção.
+* `APIWS_PUBLIC_URL`: A URL pública/base da instalação para retorno de webhooks (ex: `https://apiws.hartmidia.com`).
+* `MAX_SESSIONS`: Limite de sessões simultâneas que podem ser criadas no banco de dados. O recomendado inicial é `5` para evitar Out of Memory em ambientes restritos (cPanel). Deve ser um inteiro positivo (valores inválidos caem para o fallback seguro de 5).
+* `sessionId`: Identificador da sessão WhatsApp gerada. Deve ser único dentro desta instalação e, junto com o `APIWS_ENGINE_ID`, garante unicidade global na APIH.
+
 ## Estrutura Rápida da Documentação (/docs)
 - **[Padrões de Documentação](docs/padroes-documentacao-apiws.md)**: Regras vitais antes de comitar.
 - **[Instância WhatsApp](docs/instancia/instancia-apiws-whatsapp.md)**: Como o serviço se isola da regra de negócio (HAXIS).

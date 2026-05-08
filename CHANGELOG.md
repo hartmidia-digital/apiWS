@@ -4,6 +4,13 @@ Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 
 ## [Não lançado]
 
+### Ajustes Operacionais e Homologação
+- implementado endpoint seguro de verificação de saúde (`GET /health`) para monitoramento;
+- ajustado o limite inicial de sessões sugerido de `10` para `MAX_SESSIONS=5`;
+- implementada trava (HTTP 403) na criação de novas sessões que impede ultrapassar o valor de `MAX_SESSIONS`;
+- revisado o envio correto de `engine_id` e `engine_base_url` nos webhooks com payload assinado via HMAC;
+- revisada a documentação (`/docs`) e `README.md` refletindo os novos parâmetros e endpoints adicionados.
+
 ### Funcionalidades
 - adicionado envio de `engine_id` nos webhooks para APIH;
 - adicionado envio de `engine_base_url` nos webhooks para APIH;

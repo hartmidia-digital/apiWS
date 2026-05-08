@@ -25,6 +25,9 @@ Para garantir que os arquivos sensíveis não fiquem expostos na web, a estrutur
     *   `NODE_ENV=production`
     *   `APP_BASE_PATH=/home/usebws/api`
     *   `DATA_PATH=/home/usebws/apiws-data`
+    *   `APIWS_ENGINE_ID=apiws.seu-dominio.com` (Obrigatório em produção)
+    *   `APIWS_PUBLIC_URL=https://apiws.seu-dominio.com`
+    *   `MAX_SESSIONS=5`
     *   `ADMIN_DASHBOARD_PASSWORD=...`
     *   `MASTER_API_KEY=...`
     *   `TOKEN_ENCRYPTION_KEY=...` (64 char hex)
@@ -34,8 +37,9 @@ Para garantir que os arquivos sensíveis não fiquem expostos na web, a estrutur
 ## 4. Instalação e Execução Inicial
 1. Depois de salvar, clique no botão **Run NPM Install** na mesma tela do cPanel.
 2. Clique em **Restart** ou **Start App**.
-3. O servidor criará automaticamente a pasta `/home/usebws/apiws-data/` contendo `database`, `media`, `logs`, e `auth_info_baileys`.
-4. Você pode validar se o deploy foi bem sucedido acessando o shell do cPanel e rodando:
+3. O servidor criará automaticamente a pasta `/home/usebws/apiws-data/` contendo `database`, `media`, `logs`, e `auth_info_baileys`. Se a variável `APIWS_ENGINE_ID` não estiver definida e o ambiente for de produção, a aplicação falhará de forma segura (Fatal Error).
+4. Você pode validar se o deploy foi bem sucedido consultando o endpoint `https://api.useb.ws/health` que retornará o status `ok` e o ambiente (`production`).
+5. Alternativamente, via shell do cPanel, rode:
    `cd /home/usebws/api && npm run check:production`
 
 ## 5. Fluxo Técnico: Como Escanear o QR Code

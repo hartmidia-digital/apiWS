@@ -26,6 +26,8 @@ O APIH do outro lado deve ler o body e recriar o hash HMAC-SHA256 usando o mesmo
 
 ## 5. Payloads
 O Payload enviado em JSON tenta enviar a formatação bruta do Baileys e um resumo simplificado. Em novas arquiteturas de multi-instalação da ApiWS, também adicionamos a identificação de origem (`engine_id` e `engine_base_url`), permitindo que a APIH resolva corretamente de que servidor esta sessão pertence.
+A combinação da origem (`engine_id`) e da sessão interna (`engine_session_id`) resolve conflitos entre múltiplas instâncias e separa contextos entre locatários (tenants) no APIH.
+O payload inteiro é assinado utilizando o HMAC, garantindo a proteção contra falsificações (tampering).
 *(Para aprofundamento, leia [Integração HAXIS APIH: Identidade Operacional e Engine ID](./integracao-apih-engine-id.md))*
 
 **Exemplo Fictício (Anonimizado) de `message.received`:**
