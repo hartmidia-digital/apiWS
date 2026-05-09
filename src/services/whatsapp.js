@@ -129,11 +129,26 @@ async function connect(sessionId, onUpdate, onMessage, onEvent) {
 
         if (qr) {
             Session.updateStatus(sessionId, 'GENERATING_QR', 'Scan QR code');
+            engineLogger.info('session', 'session.qr_generated', sessionId, 'QR Code gerado (não persistido)');
             if (onUpdate) onUpdate(sessionId, 'GENERATING_QR', 'Scan QR code', qr);
+
+            // Broadcast QR directly via WebSocket to bypass DB logging
+            const wss = require('../../index').wss || engineLogger.wssInstance;
+            if (wss) {
+                const qrMessage = JSON.stringify({
+                    event: 'qr.generated',
+                    sessionId: sessionId,
+                    qr: qr
+                });
+                wss.clients.forEach(client => {
+                    if (client.readyState === 1 && client.isOpsClient) client.send(qrMessage);
+                });
+            }
         }
 
         if (connection === 'connecting') {
             Session.updateStatus(sessionId, 'CONNECTING', 'Connecting...');
+            engineLogger.info('session', 'session.connecting', sessionId, 'Tentando conectar...');
             if (onUpdate) onUpdate(sessionId, 'CONNECTING', 'Connecting...', null);
         }
 
@@ -143,7 +158,20 @@ async function connect(sessionId, onUpdate, onMessage, onEvent) {
 
             const name = sock.user?.name || 'Unknown';
             Session.updateStatus(sessionId, 'CONNECTED', `Connected as ${name}`);
+            engineLogger.info('session', 'session.connected', sessionId, 'Sessão conectada com sucesso', { deviceName: name });
             if (onUpdate) onUpdate(sessionId, 'CONNECTED', `Connected as ${name}`, null);
+
+            // Broadcast connected event to clear QR modal in UI
+            const wss = require('../../index').wss || engineLogger.wssInstance;
+            if (wss) {
+                const connMessage = JSON.stringify({
+                    event: 'session.connected',
+                    sessionId: sessionId
+                });
+                wss.clients.forEach(client => {
+                    if (client.readyState === 1 && client.isOpsClient) client.send(connMessage);
+                });
+            }
         }
 
         if (connection === 'close') {
@@ -158,18 +186,22 @@ async function connect(sessionId, onUpdate, onMessage, onEvent) {
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 401 && statusCode !== 403;
 
             if (shouldReconnect) {
+                engineLogger.warn('session', 'session.disconnected', sessionId, 'Sessão desconectada (tentando reconectar)', { statusCode, reason });
                 const retryCount = (retryCounters.get(sessionId) || 0) + 1;
                 retryCounters.set(sessionId, retryCount);
 
                 if (retryCount <= 5) {
                     console.log(`[${sessionId}] Reconnecting... (attempt ${retryCount})`);
+                    engineLogger.info('session', 'session.reconnecting', sessionId, `Tentativa de reconexão (${retryCount}/5)`);
                     setTimeout(() => connect(sessionId, onUpdate, onMessage, onEvent), 5000);
                 } else {
                     console.log(`[${sessionId}] Max retries reached`);
+                    engineLogger.error('session', 'session.reconnect_failed', sessionId, 'Máximo de tentativas de reconexão atingido', { reason });
                     retryCounters.delete(sessionId);
                 }
             } else {
                 // Clear session data on logout
+                engineLogger.error('session', 'session.logged_out', sessionId, 'Sessão desconectada (Logged Out/Inválida)', { statusCode, reason });
                 if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
                     console.log(`[${sessionId}] Logged out, cleaning session data`);
                     if (fs.existsSync(sessionDir)) {
@@ -189,6 +221,12 @@ async function connect(sessionId, onUpdate, onMessage, onEvent) {
                 if (!msg.message || isStatusBroadcastMessage(msg)) {
                     continue;
                 }
+
+                engineLogger.info('message', 'message.received', sessionId, 'Mensagem recebida', {
+                    messageId: msg.key?.id,
+                    remoteJid: msg.key?.remoteJid,
+                    fromMe: msg.key?.fromMe
+                });
 
                 await attachMediaAsset(sock, msg);
                 onMessage(sessionId, msg);

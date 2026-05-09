@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Console Operacional ApiWS</title>
+    <link rel="stylesheet" href="/ops/css/ops.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="sidebar-header"><span>⚙️ ApiWS Ops</span></div>
+        <nav class="sidebar-nav">
+            <a href="/ops/" class="sidebar-link active">Visão Geral</a>
+            <a href="/ops/sessions.html" class="sidebar-link">Sessões WhatsApp</a>
+            <a href="/ops/live-logs.html" class="sidebar-link">Logs ao Vivo</a>
+            <a href="/ops/events.html" class="sidebar-link">Histórico de Eventos</a>
+            <a href="/ops/health.html" class="sidebar-link">Saúde do Motor</a>
+            <a href="/ops/integration.html" class="sidebar-link">Integração APIH</a>
+        </nav>
+        <div class="sidebar-footer"><button class="logout-btn" onclick="doLogout()">Sair</button></div>
+    </aside>
+
+    <main class="main-content" data-testid="ops-dashboard-page">
+        <header class="topbar">
+            <h1>Visão Geral do Motor</h1>
+            <div class="user-info">Admin: <span id="userEmailDisplay">carregando...</span></div>
+        </header>
+
+        <div class="content-wrapper">
+            <div class="grid grid-cols-4 mb-4">
+                <div class="stat-card">
+                    <span class="stat-label">Status do Motor</span>
+                    <span class="stat-value" id="motorStatus">Online</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Sessões Conectadas</span>
+                    <span class="stat-value" id="sessionsConnected">-</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Sessões Totais</span>
+                    <span class="stat-value" id="sessionsTotal">-</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Último Webhook</span>
+                    <span class="stat-value" id="lastWebhook" style="font-size: 1.25rem;">-</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2">
+                <div class="card">
+                    <h2 class="card-title">Ambiente</h2>
+                    <table id="envTable">
+                        <tbody>
+                            <tr><td>Engine ID</td><td id="envEngineId">-</td></tr>
+                            <tr><td>Ambiente</td><td id="envNodeEnv">-</td></tr>
+                            <tr><td>Uptime</td><td id="envUptime">-</td></tr>
+                            <tr><td>Memória</td><td id="envMemory">-</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title">Ações Rápidas</h2>
+                    <div style="display: flex; gap: 1rem; flex-direction: column;">
+                        <button class="btn btn-primary" onclick="window.location.href='/ops/sessions.html'">Gerenciar Sessões</button>
+                        <button class="btn btn-secondary" onclick="window.location.href='/ops/live-logs.html'">Ver Logs Técnicos</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/ops/js/ops-auth.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = await checkOpsAuth();
+            if (user) loadOverview();
+        });
+
+        async function loadOverview() {
+            try {
+                const res = await fetch('/api/v1/ops/overview');
+                const data = await res.json();
+                if(data.status === 'success') {
+                    const stats = data.data;
+                    document.getElementById('sessionsConnected').textContent = stats.sessionsConnected;
+                    document.getElementById('sessionsTotal').textContent = stats.sessionsTotal;
+                    document.getElementById('envEngineId').textContent = stats.engineId;
+                    document.getElementById('envNodeEnv').textContent = stats.nodeEnv;
+                    document.getElementById('envUptime').textContent = stats.uptimeFormatted;
+                    document.getElementById('envMemory').textContent = stats.memoryUsage;
+                    document.getElementById('lastWebhook').textContent = stats.lastWebhook || 'Nenhum recente';
+                }
+            } catch(e) {}
+        }
+    </script>
+</body>
+</html>

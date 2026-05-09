@@ -135,6 +135,32 @@ function initializeSchema() {
         )
     `);
 
+    // Engine logs table
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS engine_logs (
+            id TEXT PRIMARY KEY,
+            level TEXT NOT NULL,
+            category TEXT NOT NULL,
+            event TEXT NOT NULL,
+            session_id TEXT,
+            message TEXT NOT NULL,
+            details_json TEXT,
+            correlation_id TEXT,
+            source TEXT,
+            ip TEXT,
+            user_email TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    // Indexes for engine_logs
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_enginelogs_created_at ON engine_logs(created_at)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_enginelogs_level ON engine_logs(level)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_enginelogs_category ON engine_logs(category)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_enginelogs_event ON engine_logs(event)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_enginelogs_session_id ON engine_logs(session_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_enginelogs_correlation_id ON engine_logs(correlation_id)`);
+
     console.log('[Database] Schema initialized successfully');
 }
 

@@ -38,6 +38,7 @@ Aqui documentamos tudo sobre a aplicação cujo papel é conectar, persistir e g
 
 ### Operação
 - `[Oficial]` [Operação de Sessões WhatsApp ApiWS](operacao/operacao-sessoes-whatsapp-apiws.md)
+- `[Oficial]` [Console Operacional ApiWS](operacao/console-operacional-apiws.md)
 
 ### Webhooks
 - `[Oficial]` [Webhooks ApiWS para APIH](webhooks/webhooks-apiws-para-apih.md)

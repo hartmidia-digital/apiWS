@@ -2,6 +2,7 @@ const axios = require('axios');
 const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const pino = require('pino');
+const engineLogger = require('./engineLogger');
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 
@@ -151,11 +152,14 @@ async function sendWebhook(eventType, engineSessionId, rawPayload) {
             timeout: timeoutMs
         }).then(() => {
             logger.debug(`Webhook enviado: ${eventType} para sessao ${engineSessionId}`);
+            engineLogger.info('webhook', 'webhook.dispatch_success', engineSessionId, `Webhook enviado com sucesso (${eventType})`, { eventId: payload.event_id, eventType });
         }).catch(error => {
             logger.error(`Falha ao enviar webhook ${eventType}: ${error.message}`);
+            engineLogger.error('webhook', 'webhook.dispatch_failed', engineSessionId, `Falha ao enviar webhook (${eventType})`, { eventId: payload.event_id, eventType, error: error.message });
         });
     } catch (error) {
         logger.error(`Falha ao processar webhook ${eventType}: ${error.message}`);
+        engineLogger.error('webhook', 'webhook.dispatch_failed', engineSessionId, `Erro interno ao processar webhook (${eventType})`, { eventId: payload.event_id, eventType, error: error.message });
     }
 }
 

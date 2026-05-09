@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sessões WhatsApp - Ops ApiWS</title>
+    <link rel="stylesheet" href="/ops/css/ops.css">
+    <script src="/admin/js/qrcode.min.js"></script>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="sidebar-header"><span>⚙️ ApiWS Ops</span></div>
+        <nav class="sidebar-nav">
+            <a href="/ops/" class="sidebar-link">Visão Geral</a>
+            <a href="/ops/sessions.html" class="sidebar-link active">Sessões WhatsApp</a>
+            <a href="/ops/live-logs.html" class="sidebar-link">Logs ao Vivo</a>
+            <a href="/ops/events.html" class="sidebar-link">Histórico de Eventos</a>
+            <a href="/ops/health.html" class="sidebar-link">Saúde do Motor</a>
+            <a href="/ops/integration.html" class="sidebar-link">Integração APIH</a>
+        </nav>
+        <div class="sidebar-footer"><button class="logout-btn" onclick="doLogout()">Sair</button></div>
+    </aside>
+
+    <main class="main-content" data-testid="ops-sessions-page">
+        <header class="topbar">
+            <h1>Sessões WhatsApp</h1>
+            <div class="user-info">Admin: <span id="userEmailDisplay">carregando...</span></div>
+        </header>
+
+        <div class="content-wrapper">
+            <div class="card">
+                <div class="flex-between mb-4">
+                    <h2 class="card-title" style="margin: 0;">Sessões Ativas</h2>
+                    <button class="btn btn-primary" data-testid="ops-create-session-button" onclick="showCreateModal()">Nova Sessão</button>
+                </div>
+
+                <div class="table-container">
+                    <table id="sessionsTable">
+                        <thead>
+                            <tr>
+                                <th>Session ID</th>
+                                <th>Status</th>
+                                <th>Telefone/Nome</th>
+                                <th>Criada Em</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="5" class="text-center">Carregando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal QR Code -->
+    <div id="qrModal" class="modal-overlay" data-testid="ops-qr-modal">
+        <div class="modal-content text-center">
+            <div class="modal-header">
+                <h3 class="modal-title" id="qrSessionId">Sessão: -</h3>
+                <button class="close-modal" onclick="closeQrModal()">&times;</button>
+            </div>
+            <div class="qr-container">
+                <div id="qrcode"></div>
+                <div id="qrStatus" class="mt-4" style="margin-top: 1rem; font-weight: bold;">Aguardando...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Create Session -->
+    <div id="createModal" class="modal-overlay" data-testid="ops-create-session-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Criar Nova Sessão</h3>
+                <button class="close-modal" onclick="closeCreateModal()">&times;</button>
+            </div>
+            <div>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">ID da Sessão (Apenas letras minúsculas, números e hífens)</label>
+                    <input type="text" id="newSessionId" class="form-control w-full" placeholder="ex: apiws-haxis-01">
+                </div>
+                <button class="btn btn-primary w-full" data-testid="ops-create-session-submit" onclick="createSession()">Criar e Conectar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/ops/js/ops-auth.js"></script>
+    <script src="/ops/js/ops-sessions.js"></script>
+</body>
+</html>

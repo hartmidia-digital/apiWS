@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Histórico de Eventos - Ops ApiWS</title>
+    <link rel="stylesheet" href="/ops/css/ops.css">
+    <style>
+        .filters-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="sidebar-header"><span>⚙️ ApiWS Ops</span></div>
+        <nav class="sidebar-nav">
+            <a href="/ops/" class="sidebar-link">Visão Geral</a>
+            <a href="/ops/sessions.html" class="sidebar-link">Sessões WhatsApp</a>
+            <a href="/ops/live-logs.html" class="sidebar-link">Logs ao Vivo</a>
+            <a href="/ops/events.html" class="sidebar-link active">Histórico de Eventos</a>
+            <a href="/ops/health.html" class="sidebar-link">Saúde do Motor</a>
+            <a href="/ops/integration.html" class="sidebar-link">Integração APIH</a>
+        </nav>
+        <div class="sidebar-footer"><button class="logout-btn" onclick="doLogout()">Sair</button></div>
+    </aside>
+
+    <main class="main-content" data-testid="ops-events-page">
+        <header class="topbar">
+            <h1>Histórico de Eventos Técnicos</h1>
+            <div class="user-info">Admin: <span id="userEmailDisplay">carregando...</span></div>
+        </header>
+
+        <div class="content-wrapper">
+            <div class="card">
+                <form id="filtersForm" class="filters-form" onsubmit="event.preventDefault(); loadEvents();">
+                    <div><label class="stat-label">Session ID</label><input type="text" id="fSessionId" class="form-control w-full"></div>
+                    <div>
+                        <label class="stat-label">Level</label>
+                        <select id="fLevel" class="form-control w-full">
+                            <option value="">Todos</option>
+                            <option value="INFO">INFO</option>
+                            <option value="WARN">WARN</option>
+                            <option value="ERROR">ERROR</option>
+                            <option value="FATAL">FATAL</option>
+                        </select>
+                    </div>
+                    <div><label class="stat-label">Categoria</label><input type="text" id="fCategory" class="form-control w-full"></div>
+                    <div><label class="stat-label">Evento</label><input type="text" id="fEvent" class="form-control w-full"></div>
+                    <div style="display:flex; align-items:flex-end;"><button type="submit" class="btn btn-primary w-full">Filtrar</button></div>
+                </form>
+
+                <div class="table-container">
+                    <table id="eventsTable">
+                        <thead>
+                            <tr><th>Data/Hora</th><th>Level</th><th>Sessão</th><th>Categoria::Evento</th><th>Mensagem</th></tr>
+                        </thead>
+                        <tbody><tr><td colspan="5" class="text-center">Use os filtros.</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/ops/js/ops-auth.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = await checkOpsAuth();
+            if (user) loadEvents();
+        });
+
+        async function loadEvents() {
+            const tbody = document.querySelector('#eventsTable tbody');
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center">Buscando...</td></tr>';
+            const params = new URLSearchParams();
+            const sid = document.getElementById('fSessionId').value.trim();
+            const lvl = document.getElementById('fLevel').value;
+            const cat = document.getElementById('fCategory').value.trim();
+            const evt = document.getElementById('fEvent').value.trim();
+            if(sid) params.append('sessionId', sid);
+            if(lvl) params.append('level', lvl);
+            if(cat) params.append('category', cat);
+            if(evt) params.append('event', evt);
+            try {
+                const res = await fetch(`/api/v1/ops/logs?${params.toString()}`);
+                const data = await res.json();
+                if (data.status === 'success') {
+                    tbody.innerHTML = '';
+                    if (data.data.length === 0) return tbody.innerHTML = '<tr><td colspan="5" class="text-center">Nenhum evento.</td></tr>';
+                    data.data.forEach(log => {
+                        const tr = document.createElement('tr');
+                        const time = new Date(log.timestamp || log.created_at).toLocaleString();
+                        tr.innerHTML = `
+                            <td>${time}</td>
+                            <td><span class="badge ${log.level === 'ERROR' || log.level === 'FATAL' ? 'badge-danger' : log.level === 'WARN' ? 'badge-warning' : 'badge-info'}">${log.level}</span></td>
+                            <td>${log.sessionId || log.session_id || '-'}</td>
+                            <td>${log.category}::${log.event}</td>
+                            <td><div style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${log.message}</div></td>
+                        `;
+                        tr.style.cursor = 'pointer';
+                        tr.onclick = () => alert(`${log.message}
+
+Detalhes:
+${JSON.stringify(log.details || log.details_json, null, 2)}`);
+                        tbody.appendChild(tr);
+                    });
+                }
+            } catch(e) { tbody.innerHTML = '<tr><td colspan="5" class="text-center">Erro ao buscar.</td></tr>'; }
+        }
+    </script>
+</body>
+</html>

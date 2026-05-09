@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integração APIH - Ops ApiWS</title>
+    <link rel="stylesheet" href="/ops/css/ops.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="sidebar-header"><span>⚙️ ApiWS Ops</span></div>
+        <nav class="sidebar-nav">
+            <a href="/ops/" class="sidebar-link">Visão Geral</a>
+            <a href="/ops/sessions.html" class="sidebar-link">Sessões WhatsApp</a>
+            <a href="/ops/live-logs.html" class="sidebar-link">Logs ao Vivo</a>
+            <a href="/ops/events.html" class="sidebar-link">Histórico de Eventos</a>
+            <a href="/ops/health.html" class="sidebar-link">Saúde do Motor</a>
+            <a href="/ops/integration.html" class="sidebar-link active">Integração APIH</a>
+        </nav>
+        <div class="sidebar-footer"><button class="logout-btn" onclick="doLogout()">Sair</button></div>
+    </aside>
+
+    <main class="main-content" data-testid="ops-integration-page">
+        <header class="topbar">
+            <h1>Integração Webhook (APIH / HAXIS)</h1>
+            <div class="user-info">Admin: <span id="userEmailDisplay">carregando...</span></div>
+        </header>
+
+        <div class="content-wrapper">
+            <div class="grid grid-cols-2">
+                <div class="card">
+                    <h2 class="card-title">Configuração Atual</h2>
+                    <table>
+                        <tbody>
+                            <tr><td>Webhook URL</td><td id="iWebhookUrl">-</td></tr>
+                            <tr><td>Secret Configurado?</td><td id="iSecret">-</td></tr>
+                            <tr><td>APIWS_ENGINE_ID</td><td id="iEngineId">-</td></tr>
+                            <tr><td>APIWS_PUBLIC_URL</td><td id="iPublicUrl">-</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title">Estatísticas de Disparo (Hoje)</h2>
+                    <table>
+                        <tbody>
+                            <tr><td>Enviados com Sucesso</td><td id="iSuccessCount">-</td></tr>
+                            <tr><td>Falhas</td><td id="iErrorCount">-</td></tr>
+                            <tr><td>Último Sucesso</td><td id="iLastSuccess">-</td></tr>
+                            <tr><td>Último Erro</td><td id="iLastError">-</td></tr>
+                        </tbody>
+                    </table>
+
+                    <div class="mt-4" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+                        <button class="btn btn-primary" onclick="testWebhook()" id="btnTest">Disparar Teste</button>
+                        <div id="testResult" style="margin-top: 1rem; font-size: 0.875rem;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/ops/js/ops-auth.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = await checkOpsAuth();
+            if (user) loadIntegration();
+        });
+
+        async function loadIntegration() {
+            try {
+                const res = await fetch('/api/v1/ops/integration');
+                const data = await res.json();
+                if(data.status === 'success') {
+                    const info = data.data;
+                    document.getElementById('iWebhookUrl').textContent = info.webhookUrl || '-';
+                    document.getElementById('iSecret').innerHTML = info.hasSecret ? '<span class="badge badge-success">Sim</span>' : '<span class="badge badge-warning">Não</span>';
+                    document.getElementById('iEngineId').textContent = info.engineId || '-';
+                    document.getElementById('iPublicUrl').textContent = info.publicUrl || '-';
+                    document.getElementById('iSuccessCount').textContent = info.stats.successToday;
+                    document.getElementById('iErrorCount').textContent = info.stats.errorsToday;
+                }
+            } catch(e) {}
+        }
+
+        async function testWebhook() {
+            const btn = document.getElementById('btnTest');
+            btn.disabled = true; btn.textContent = 'Testando...';
+            try {
+                const res = await fetch('/api/v1/ops/webhooks/test', { method: 'POST' });
+                const data = await res.json();
+                document.getElementById('testResult').innerHTML = data.status === 'success'
+                    ? `<span style="color: green;">Sucesso (${data.data.durationMs}ms)</span>`
+                    : `<span style="color: red;">Falha</span>`;
+            } catch (e) {
+                document.getElementById('testResult').innerHTML = `<span style="color: red;">Erro</span>`;
+            } finally {
+                btn.disabled = false; btn.textContent = 'Disparar Teste';
+            }
+        }
+    </script>
+</body>
+</html>
