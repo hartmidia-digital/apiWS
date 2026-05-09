@@ -22,6 +22,7 @@ const FormData = require('form-data');
 const Session = require('../models/Session');
 const ActivityLog = require('../models/ActivityLog');
 const haxisPaths = require('../config/paths');
+const engineLogger = require('../utils/engineLogger');
 
 // Logger configuration
 const defaultLogLevel = "info";

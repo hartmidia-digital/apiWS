@@ -1,6 +1,6 @@
 # Changelog
 
-Todas as mudanças notáveis para o projeto ApiWS serão documentadas neste arquivo.
+Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 
 ## [Unreleased]
 ### Added
@@ -21,10 +21,6 @@ Todas as mudanças notáveis para o projeto ApiWS serão documentadas neste arqu
 - `src/services/whatsapp.js`: Eventos de status (connecting, open, close) e recepção de mensagens agora são emitidos pro \`engineLogger\`.
 - `src/utils/webhookHaxis.js`: Despachos enviados com sucesso ou falha agora registram log na observabilidade do motor.
 - `index.js`: Integrado a inicialização das novas rotas de `/ops` e middleware de segurança protegendo todos os recursos HTML do painel utilizando a role `admin`.
-
-# Changelog
-
-Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 
 ## [Não lançado]
 

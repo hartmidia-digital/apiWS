@@ -26,8 +26,12 @@ router.get('/overview', (req, res) => {
     const dbSessions = Session.getAll('admin@localhost', true);
 
     // Active connections in memory
-    const activeSessions = whatsappService.getAllSessions();
-    const connectedCount = activeSessions.filter(s => s.status === 'CONNECTED').length;
+    const activeSessionsMap = whatsappService.getActiveSessions();
+    let connectedCount = 0;
+    // Iterate DB sessions to see which are actually CONNECTED
+    dbSessions.forEach(s => {
+        if (s.status === 'CONNECTED') connectedCount++;
+    });
 
     // Get last webhook log
     const lastWebhookLogs = EngineLog.getLogs({ category: 'webhook', event: 'webhook.dispatch_success' }, 1);
@@ -59,7 +63,7 @@ router.get('/health', (req, res) => {
     const memory = process.memoryUsage();
 
     const dbSessions = Session.getAll('admin@localhost', true);
-    const activeSessions = whatsappService.getAllSessions();
+    const activeSessions = whatsappService.getActiveSessions();
 
     const pathsStatus = {};
     for (const [key, p] of Object.entries(haxisPaths)) {
@@ -81,7 +85,7 @@ router.get('/health', (req, res) => {
             publicUrl: process.env.APIWS_PUBLIC_URL,
             maxSessions: process.env.MAX_SESSIONS || 5,
             sessionsInDb: dbSessions.length,
-            sessionsInMemory: activeSessions.length,
+            sessionsInMemory: activeSessions.size,
             paths: pathsStatus
         }
     });
@@ -97,10 +101,11 @@ router.get('/sessions', (req, res) => {
 
     // Augment with live memory status
     const result = dbSessions.map(dbSess => {
-        const liveSess = whatsappService.getSession(dbSess.id);
+        const liveSess = whatsappService.getActiveSessions().get(dbSess.id);
+        // DB is the source of truth for status since we update it real time
         return {
             id: dbSess.id,
-            status: liveSess ? liveSess.status : (dbSess.status || 'DISCONNECTED'),
+            status: dbSess.status || 'DISCONNECTED',
             detail: dbSess.detail,
             createdAt: dbSess.created_at,
             updatedAt: dbSess.updated_at
@@ -128,12 +133,8 @@ router.post('/sessions', async (req, res) => {
     }
 
     try {
-        const session = Session.create({
-            id: sessionId,
-            ownerEmail: req.user.email,
-            status: 'DISCONNECTED',
-            detail: ''
-        });
+        const ownerEmail = req.session?.userEmail || 'admin@localhost';
+        const session = Session.create(sessionId, ownerEmail);
 
         engineLogger.info('session', 'session.created', sessionId, 'Sessão criada via painel Ops');
         res.json({ status: 'success', data: session });
@@ -148,11 +149,11 @@ router.post('/sessions', async (req, res) => {
  */
 router.post('/sessions/:id/connect', async (req, res) => {
     const { id } = req.params;
-    const session = Session.getById(id);
+    const session = Session.findById(id);
     if (!session) return res.status(404).json({ status: 'error', message: 'Sessão não encontrada' });
 
     engineLogger.info('session', 'session.connecting', id, 'Comando de conexão iniciado via Ops');
-    await whatsappService.createSession(id);
+    await whatsappService.connect(id, () => {}, () => {}, () => {});
 
     res.json({ status: 'success', message: 'Comando de conexão enviado' });
 });
@@ -163,10 +164,10 @@ router.post('/sessions/:id/connect', async (req, res) => {
 router.post('/sessions/:id/disconnect', async (req, res) => {
     const { id } = req.params;
     engineLogger.info('session', 'session.disconnected', id, 'Comando de desconexão iniciado via Ops');
-    await whatsappService.deleteSession(id);
+    await whatsappService.disconnect(id);
 
     // Update DB status to disconnected
-    Session.update(id, { status: 'DISCONNECTED' });
+    Session.updateStatus(id, 'DISCONNECTED', '');
 
     res.json({ status: 'success', message: 'Sessão desconectada' });
 });
@@ -177,10 +178,10 @@ router.post('/sessions/:id/disconnect', async (req, res) => {
 router.post('/sessions/:id/restart', async (req, res) => {
     const { id } = req.params;
     engineLogger.info('session', 'session.reconnecting', id, 'Reinício de conexão solicitado via Ops');
-    await whatsappService.deleteSession(id);
+    await whatsappService.disconnect(id);
 
     setTimeout(async () => {
-        await whatsappService.createSession(id);
+        await whatsappService.connect(id, () => {}, () => {}, () => {});
     }, 2000);
 
     res.json({ status: 'success', message: 'Reiniciando sessão' });
@@ -193,7 +194,7 @@ router.post('/sessions/:id/reset-auth', async (req, res) => {
     const { id } = req.params;
     engineLogger.warn('session', 'session.auth_reset', id, 'Reset de autenticação (exclusão de arquivos) solicitado via Ops');
 
-    await whatsappService.deleteSession(id);
+    await whatsappService.disconnect(id);
 
     // Delete folder
     const authPath = path.join(haxisPaths.authInfo, `session-${id}`);
@@ -201,7 +202,7 @@ router.post('/sessions/:id/reset-auth', async (req, res) => {
         fs.rmSync(authPath, { recursive: true, force: true });
     }
 
-    Session.update(id, { status: 'DISCONNECTED', detail: '' });
+    Session.updateStatus(id, { status: 'DISCONNECTED', detail: '' });
 
     res.json({ status: 'success', message: 'Autenticação resetada com sucesso' });
 });
@@ -213,7 +214,7 @@ router.delete('/sessions/:id', async (req, res) => {
     const { id } = req.params;
     engineLogger.warn('session', 'session.deleted', id, 'Exclusão de sessão solicitada via Ops');
 
-    await whatsappService.deleteSession(id);
+    await whatsappService.disconnect(id);
 
     const authPath = path.join(haxisPaths.authInfo, `session-${id}`);
     if (fs.existsSync(authPath)) {
@@ -288,12 +289,30 @@ router.post('/webhooks/test', async (req, res) => {
 
     const start = Date.now();
     try {
-        await sendWebhook('webhook.test', 'ops-test-session', payload);
+        const axios = require('axios');
+        const timeoutMs = parseInt(process.env.WEBHOOK_TIMEOUT_MS || '5000', 10);
+
+        const payloadString = JSON.stringify(payload);
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Haxis-Event-Id': 'test-uuid',
+            'X-Haxis-Event-Type': payload.event,
+            'X-Haxis-Timestamp': payload.timestamp
+        };
+
+        if (process.env.WEBHOOK_SECRET) {
+            const crypto = require('crypto');
+            headers['X-Haxis-Signature'] = crypto.createHmac('sha256', process.env.WEBHOOK_SECRET)
+                .update(payloadString)
+                .digest('hex');
+        }
+
+        const axiosRes = await axios.post(process.env.WEBHOOK_URL, payloadString, { headers, timeout: timeoutMs });
         const duration = Date.now() - start;
 
-        engineLogger.info('webhook', 'webhook.dispatch_success', null, 'Teste de webhook enviado com sucesso', { statusCode: 200, durationMs: duration });
+        engineLogger.info('webhook', 'webhook.dispatch_success', null, 'Teste de webhook enviado com sucesso', { statusCode: axiosRes.status, durationMs: duration });
 
-        res.json({ status: 'success', data: { statusCode: 200, durationMs: duration } });
+        res.json({ status: 'success', data: { statusCode: axiosRes.status, durationMs: duration } });
     } catch (error) {
         const duration = Date.now() - start;
         engineLogger.error('webhook', 'webhook.dispatch_failed', null, 'Falha no teste de webhook', { error: error.message, durationMs: duration });
