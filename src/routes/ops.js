@@ -144,6 +144,24 @@ router.post('/sessions', async (req, res) => {
     }
 });
 
+function connectSessionWithCoreCallbacks(sessionId) {
+    whatsappService.connect(sessionId, (id, status, detail, qr) => {
+        Session.updateStatus(id, status, detail);
+        sendWebhook('session.status', id, { status, detail, state: status });
+        const wss = engineLogger.wssInstance;
+        if (wss) {
+            const msg = JSON.stringify({ type: 'session-update', data: { sessionId: id, status, detail, qr }});
+            wss.clients.forEach(c => {
+                if (c.readyState === 1 && !c.isOpsClient) c.send(msg);
+            });
+        }
+    }, (id, msg) => {
+        sendWebhook('message.received', id, msg);
+    }, (id, eventType, payload) => {
+        sendWebhook(eventType, id, payload);
+    });
+}
+
 /**
  * POST /api/v1/ops/sessions/:id/connect
  */
@@ -153,26 +171,7 @@ router.post('/sessions/:id/connect', async (req, res) => {
     if (!session) return res.status(404).json({ status: 'error', message: 'Sessão não encontrada' });
 
     engineLogger.info('session', 'session.connecting', id, 'Comando de conexão iniciado via Ops');
-
-    whatsappService.connect(id, (sid, status, detail, qr) => {
-        Session.updateStatus(sid, status, detail);
-        sendWebhook('session.status', sid, { status, detail, state: status });
-
-        // Broadcast temporário extra além do DB se necessário,
-        // mas o index.js já tem loops de reconnect e o painel Ops ouve os logs do engineLogger e webhook.
-        // Se quisermos repassar o evento específico do WS legado:
-        const wss = engineLogger.wssInstance;
-        if (wss) {
-            const msg = JSON.stringify({ type: 'session-update', data: { sessionId: sid, status, detail, qr }});
-            wss.clients.forEach(c => {
-                if (c.readyState === 1 && !c.isOpsClient) c.send(msg); // envia pro painel legado
-            });
-        }
-    }, (sid, msg) => {
-        sendWebhook('message.received', sid, msg);
-    }, (sid, eventType, payload) => {
-        sendWebhook(eventType, sid, payload);
-    });
+    connectSessionWithCoreCallbacks(id);
 
     res.json({ status: 'success', message: 'Comando de conexão enviado' });
 });
@@ -200,22 +199,7 @@ router.post('/sessions/:id/restart', async (req, res) => {
     await whatsappService.disconnect(id);
 
     setTimeout(() => {
-        whatsappService.connect(id, (sid, status, detail, qr) => {
-            Session.updateStatus(sid, status, detail);
-            sendWebhook('session.status', sid, { status, detail, state: status });
-
-            const wss = engineLogger.wssInstance;
-            if (wss) {
-                const msg = JSON.stringify({ type: 'session-update', data: { sessionId: sid, status, detail, qr }});
-                wss.clients.forEach(c => {
-                    if (c.readyState === 1 && !c.isOpsClient) c.send(msg);
-                });
-            }
-        }, (sid, msg) => {
-            sendWebhook('message.received', sid, msg);
-        }, (sid, eventType, payload) => {
-            sendWebhook(eventType, sid, payload);
-        });
+        connectSessionWithCoreCallbacks(id);
     }, 2000);
 
     res.json({ status: 'success', message: 'Reiniciando sessão' });
@@ -228,15 +212,10 @@ router.post('/sessions/:id/reset-auth', async (req, res) => {
     const { id } = req.params;
     engineLogger.warn('session', 'session.auth_reset', id, 'Reset de autenticação (exclusão de arquivos) solicitado via Ops');
 
-    await whatsappService.disconnect(id);
+    // Disconnect and remove folder but keep db record
+    whatsappService.deleteSessionData(id);
 
-    // Delete folder
-    const authPath = path.join(haxisPaths.authInfo, `session-${id}`);
-    if (fs.existsSync(authPath)) {
-        fs.rmSync(authPath, { recursive: true, force: true });
-    }
-
-    Session.updateStatus(id, { status: 'DISCONNECTED', detail: '' });
+    Session.updateStatus(id, 'DISCONNECTED', '');
 
     res.json({ status: 'success', message: 'Autenticação resetada com sucesso' });
 });
@@ -248,12 +227,7 @@ router.delete('/sessions/:id', async (req, res) => {
     const { id } = req.params;
     engineLogger.warn('session', 'session.deleted', id, 'Exclusão de sessão solicitada via Ops');
 
-    await whatsappService.disconnect(id);
-
-    const authPath = path.join(haxisPaths.authInfo, `session-${id}`);
-    if (fs.existsSync(authPath)) {
-        fs.rmSync(authPath, { recursive: true, force: true });
-    }
+    whatsappService.deleteSessionData(id);
 
     Session.delete(id);
 

@@ -13,6 +13,16 @@ class EngineLogger {
         return wssInstance;
     }
 
+    static broadcastOpsEvent(payload) {
+        if (!wssInstance) return;
+        const wsMessage = typeof payload === 'string' ? payload : JSON.stringify(payload);
+        wssInstance.clients.forEach((client) => {
+            if (client.readyState === 1 && client.isOpsClient) {
+                client.send(wsMessage);
+            }
+        });
+    }
+
     static maskSensitiveData(str) {
         if (!str) return str;
 

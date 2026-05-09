@@ -134,15 +134,11 @@ async function connect(sessionId, onUpdate, onMessage, onEvent) {
             if (onUpdate) onUpdate(sessionId, 'GENERATING_QR', 'Scan QR code', qr);
 
             // Broadcast QR directly via WebSocket to bypass DB logging
-            const wss = require('../../index').wss || engineLogger.wssInstance;
-            if (wss) {
-                const qrMessage = JSON.stringify({
+            if (engineLogger.broadcastOpsEvent) {
+                engineLogger.broadcastOpsEvent({
                     event: 'qr.generated',
                     sessionId: sessionId,
                     qr: qr
-                });
-                wss.clients.forEach(client => {
-                    if (client.readyState === 1 && client.isOpsClient) client.send(qrMessage);
                 });
             }
         }
@@ -163,14 +159,10 @@ async function connect(sessionId, onUpdate, onMessage, onEvent) {
             if (onUpdate) onUpdate(sessionId, 'CONNECTED', `Connected as ${name}`, null);
 
             // Broadcast connected event to clear QR modal in UI
-            const wss = require('../../index').wss || engineLogger.wssInstance;
-            if (wss) {
-                const connMessage = JSON.stringify({
+            if (engineLogger.broadcastOpsEvent) {
+                engineLogger.broadcastOpsEvent({
                     event: 'session.connected',
                     sessionId: sessionId
-                });
-                wss.clients.forEach(client => {
-                    if (client.readyState === 1 && client.isOpsClient) client.send(connMessage);
                 });
             }
         }
