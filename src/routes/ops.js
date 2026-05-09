@@ -153,7 +153,26 @@ router.post('/sessions/:id/connect', async (req, res) => {
     if (!session) return res.status(404).json({ status: 'error', message: 'Sessão não encontrada' });
 
     engineLogger.info('session', 'session.connecting', id, 'Comando de conexão iniciado via Ops');
-    await whatsappService.connect(id, () => {}, () => {}, () => {});
+
+    whatsappService.connect(id, (sid, status, detail, qr) => {
+        Session.updateStatus(sid, status, detail);
+        sendWebhook('session.status', sid, { status, detail, state: status });
+
+        // Broadcast temporário extra além do DB se necessário,
+        // mas o index.js já tem loops de reconnect e o painel Ops ouve os logs do engineLogger e webhook.
+        // Se quisermos repassar o evento específico do WS legado:
+        const wss = engineLogger.wssInstance;
+        if (wss) {
+            const msg = JSON.stringify({ type: 'session-update', data: { sessionId: sid, status, detail, qr }});
+            wss.clients.forEach(c => {
+                if (c.readyState === 1 && !c.isOpsClient) c.send(msg); // envia pro painel legado
+            });
+        }
+    }, (sid, msg) => {
+        sendWebhook('message.received', sid, msg);
+    }, (sid, eventType, payload) => {
+        sendWebhook(eventType, sid, payload);
+    });
 
     res.json({ status: 'success', message: 'Comando de conexão enviado' });
 });
@@ -180,8 +199,23 @@ router.post('/sessions/:id/restart', async (req, res) => {
     engineLogger.info('session', 'session.reconnecting', id, 'Reinício de conexão solicitado via Ops');
     await whatsappService.disconnect(id);
 
-    setTimeout(async () => {
-        await whatsappService.connect(id, () => {}, () => {}, () => {});
+    setTimeout(() => {
+        whatsappService.connect(id, (sid, status, detail, qr) => {
+            Session.updateStatus(sid, status, detail);
+            sendWebhook('session.status', sid, { status, detail, state: status });
+
+            const wss = engineLogger.wssInstance;
+            if (wss) {
+                const msg = JSON.stringify({ type: 'session-update', data: { sessionId: sid, status, detail, qr }});
+                wss.clients.forEach(c => {
+                    if (c.readyState === 1 && !c.isOpsClient) c.send(msg);
+                });
+            }
+        }, (sid, msg) => {
+            sendWebhook('message.received', sid, msg);
+        }, (sid, eventType, payload) => {
+            sendWebhook(eventType, sid, payload);
+        });
     }, 2000);
 
     res.json({ status: 'success', message: 'Reiniciando sessão' });
