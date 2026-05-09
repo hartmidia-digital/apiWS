@@ -310,7 +310,7 @@ function isConnected(sessionId) {
  * Delete session data
  * @param {string} sessionId - Session ID
  */
-function deleteSessionData(sessionId) {
+function resetSessionAuth(sessionId) {
     if (!require('../utils/validation').isValidId(sessionId)) {
         return;
     }
@@ -321,7 +321,14 @@ function deleteSessionData(sessionId) {
     if (fs.existsSync(sessionDir)) {
         fs.rmSync(sessionDir, { recursive: true, force: true });
     }
+}
 
+/**
+ * Delete session data completely from memory, disk and database
+ * @param {string} sessionId - Session ID
+ */
+function deleteSessionData(sessionId) {
+    resetSessionAuth(sessionId);
     Session.delete(sessionId);
 }
 
@@ -452,6 +459,7 @@ module.exports = {
     disconnect,
     getSocket,
     isConnected,
+    resetSessionAuth,
     deleteSessionData,
     getActiveSessions,
     AUTH_DIR

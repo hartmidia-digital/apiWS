@@ -213,7 +213,7 @@ router.post('/sessions/:id/reset-auth', async (req, res) => {
     engineLogger.warn('session', 'session.auth_reset', id, 'Reset de autenticação (exclusão de arquivos) solicitado via Ops');
 
     // Disconnect and remove folder but keep db record
-    whatsappService.deleteSessionData(id);
+    whatsappService.resetSessionAuth(id);
 
     Session.updateStatus(id, 'DISCONNECTED', '');
 
