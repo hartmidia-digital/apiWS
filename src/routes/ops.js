@@ -229,8 +229,6 @@ router.delete('/sessions/:id', async (req, res) => {
 
     whatsappService.deleteSessionData(id);
 
-    Session.delete(id);
-
     res.json({ status: 'success', message: 'Sessão excluída' });
 });
 
