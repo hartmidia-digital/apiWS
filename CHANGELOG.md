@@ -2,6 +2,26 @@
 
 Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 
+## [Unreleased]
+### Added
+- **Console Operacional (`/ops`)**: Novo painel exclusivo para diagnóstico do motor WhatsApp, separado do dashboard `/admin`.
+- **Telas Inclusas**:
+  - Visão Geral (status do motor, uptime, ambiente, mem).
+  - Sessões (criação, conexão, remoção e QR code em tempo real).
+  - Logs ao Vivo (streaming via WebSocket).
+  - Histórico de Eventos (leitura do log em SQLite).
+  - Saúde do Motor (diagnósticos e paths isolados).
+  - Integração APIH (estatísticas e teste prático de webhook).
+- **Logger Central (`engineLogger.js`)**: Abstração de log que intercepta eventos do Baileys, Webhooks e do sistema (mascarando tokens, telefones, ocultando payload/QR real) com output para banco, console e WebSocket.
+- **Modelo \`EngineLog\`**: Nova tabela no SQLite (`engine_logs`) gerada para persistir todos os eventos do motor.
+- **Proteção no WebSockets (`/ops/ws`)**: Validação de sessão do painel para o acesso à rota de broadcast.
+- Documentação exclusiva para operação (`docs/operacao/console-operacional-apiws.md`).
+
+### Changed
+- `src/services/whatsapp.js`: Eventos de status (connecting, open, close) e recepção de mensagens agora são emitidos pro \`engineLogger\`.
+- `src/utils/webhookHaxis.js`: Despachos enviados com sucesso ou falha agora registram log na observabilidade do motor.
+- `index.js`: Integrado a inicialização das novas rotas de `/ops` e middleware de segurança protegendo todos os recursos HTML do painel utilizando a role `admin`.
+
 ## [Não lançado]
 
 ### Ajustes Operacionais e Homologação

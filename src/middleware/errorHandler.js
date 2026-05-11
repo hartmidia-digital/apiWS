@@ -4,6 +4,7 @@
  */
 
 const response = require('../utils/response');
+const engineLogger = require('../utils/engineLogger');
 
 /**
  * Error handler middleware
@@ -17,6 +18,8 @@ function errorHandler(err, req, res, next) {
         path: req.path,
         method: req.method
     });
+
+    engineLogger.error('system', 'system.error', null, `Erro interno da API: ${err.message}`, { path: req.path, method: req.method });
 
     // Handle specific error types
     if (err.name === 'ValidationError') {

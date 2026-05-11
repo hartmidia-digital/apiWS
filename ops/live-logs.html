@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logs ao Vivo - Ops ApiWS</title>
+    <link rel="stylesheet" href="/ops/css/ops.css">
+    <style>
+        .filters-bar { display: flex; gap: 1rem; margin-bottom: 1rem; align-items: center; background: var(--card-bg); padding: 1rem; border-radius: 0.5rem; border: 1px solid var(--border-color); }
+        .filters-bar input, .filters-bar select { padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 0.375rem; }
+        .log-details { background: rgba(0,0,0,0.2); padding: 0.5rem; margin-left: 2rem; font-size: 0.75rem; border-left: 2px solid #555; display: none; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="sidebar-header"><span>⚙️ ApiWS Ops</span></div>
+        <nav class="sidebar-nav">
+            <a href="/ops/" class="sidebar-link">Visão Geral</a>
+            <a href="/ops/sessions.html" class="sidebar-link">Sessões WhatsApp</a>
+            <a href="/ops/live-logs.html" class="sidebar-link active">Logs ao Vivo</a>
+            <a href="/ops/events.html" class="sidebar-link">Histórico de Eventos</a>
+            <a href="/ops/health.html" class="sidebar-link">Saúde do Motor</a>
+            <a href="/ops/integration.html" class="sidebar-link">Integração APIH</a>
+        </nav>
+        <div class="sidebar-footer"><button class="logout-btn" onclick="doLogout()">Sair</button></div>
+    </aside>
+
+    <main class="main-content" data-testid="ops-live-logs-page">
+        <header class="topbar">
+            <h1>Logs em Tempo Real</h1>
+            <div class="user-info">Admin: <span id="userEmailDisplay">carregando...</span></div>
+        </header>
+
+        <div class="content-wrapper">
+            <div class="filters-bar">
+                <input type="text" id="filterSessionId" placeholder="Filtrar por Session ID">
+                <select id="filterLevel">
+                    <option value="">Todos os Níveis</option>
+                    <option value="INFO">INFO</option>
+                    <option value="WARN">WARN</option>
+                    <option value="ERROR">ERROR</option>
+                    <option value="FATAL">FATAL</option>
+                    <option value="DEBUG">DEBUG</option>
+                </select>
+                <select id="filterCategory">
+                    <option value="">Todas as Categorias</option>
+                    <option value="system">System</option>
+                    <option value="session">Session</option>
+                    <option value="webhook">Webhook</option>
+                    <option value="message">Message</option>
+                </select>
+                <button class="btn btn-secondary" onclick="clearTerminal()">Limpar</button>
+                <button class="btn btn-secondary" id="btnPause" onclick="togglePause()">Pausar</button>
+                <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.875rem;">
+                    <input type="checkbox" id="autoScroll" checked> Auto-scroll
+                </label>
+            </div>
+
+            <div id="terminal" class="terminal" data-testid="ops-logs-terminal"></div>
+        </div>
+    </main>
+
+    <script src="/ops/js/ops-auth.js"></script>
+    <script src="/ops/js/ops-logs.js"></script>
+</body>
+</html>

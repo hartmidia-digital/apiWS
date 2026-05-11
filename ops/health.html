@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saúde do Motor - Ops ApiWS</title>
+    <link rel="stylesheet" href="/ops/css/ops.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="sidebar-header"><span>⚙️ ApiWS Ops</span></div>
+        <nav class="sidebar-nav">
+            <a href="/ops/" class="sidebar-link">Visão Geral</a>
+            <a href="/ops/sessions.html" class="sidebar-link">Sessões WhatsApp</a>
+            <a href="/ops/live-logs.html" class="sidebar-link">Logs ao Vivo</a>
+            <a href="/ops/events.html" class="sidebar-link">Histórico de Eventos</a>
+            <a href="/ops/health.html" class="sidebar-link active">Saúde do Motor</a>
+            <a href="/ops/integration.html" class="sidebar-link">Integração APIH</a>
+        </nav>
+        <div class="sidebar-footer"><button class="logout-btn" onclick="doLogout()">Sair</button></div>
+    </aside>
+
+    <main class="main-content" data-testid="ops-health-page">
+        <header class="topbar">
+            <h1>Saúde e Diagnóstico</h1>
+            <div class="user-info">Admin: <span id="userEmailDisplay">carregando...</span></div>
+        </header>
+
+        <div class="content-wrapper">
+            <div class="grid grid-cols-2">
+                <div class="card">
+                    <h2 class="card-title">Processo Node.js</h2>
+                    <table id="nodeTable">
+                        <tbody>
+                            <tr><td>Status</td><td><span class="badge badge-success">Running</span></td></tr>
+                            <tr><td>Versão Node</td><td id="hNodeVersion">-</td></tr>
+                            <tr><td>Uptime</td><td id="hUptime">-</td></tr>
+                            <tr><td>Memória RAM</td><td id="hMemory">-</td></tr>
+                            <tr><td>Ambiente</td><td id="hNodeEnv">-</td></tr>
+                            <tr><td>Porta</td><td id="hPort">-</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title">Configurações Base</h2>
+                    <table id="configTable">
+                        <tbody>
+                            <tr><td>APIWS_ENGINE_ID</td><td id="hEngineId">-</td></tr>
+                            <tr><td>APIWS_PUBLIC_URL</td><td id="hPublicUrl">-</td></tr>
+                            <tr><td>MAX_SESSIONS</td><td id="hMaxSessions">-</td></tr>
+                            <tr><td>Sessões em Memória</td><td id="hSessionsMemory">-</td></tr>
+                            <tr><td>Sessões no Banco</td><td id="hSessionsDb">-</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card" style="grid-column: span 2;">
+                    <h2 class="card-title">Armazenamento & Paths (Isolamento)</h2>
+                    <table id="pathsTable">
+                        <thead><tr><th>Diretório</th><th>Caminho Resolvido</th><th>Permissão de Escrita</th></tr></thead>
+                        <tbody id="pathsBody"><tr><td colspan="3" class="text-center">Carregando...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/ops/js/ops-auth.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const user = await checkOpsAuth();
+            if (user) loadHealth();
+        });
+
+        async function loadHealth() {
+            try {
+                const res = await fetch('/api/v1/ops/health');
+                const data = await res.json();
+                if(data.status === 'success') {
+                    const h = data.data;
+                    document.getElementById('hNodeVersion').textContent = h.nodeVersion;
+                    document.getElementById('hUptime').textContent = h.uptimeFormatted;
+                    document.getElementById('hMemory').textContent = h.memoryUsage;
+                    document.getElementById('hNodeEnv').textContent = h.nodeEnv;
+                    document.getElementById('hPort').textContent = h.port;
+
+                    document.getElementById('hEngineId').textContent = h.engineId || '-';
+                    document.getElementById('hPublicUrl').textContent = h.publicUrl || '-';
+                    document.getElementById('hMaxSessions').textContent = h.maxSessions;
+                    document.getElementById('hSessionsMemory').textContent = h.sessionsInMemory;
+                    document.getElementById('hSessionsDb').textContent = h.sessionsInDb;
+
+                    const pBody = document.getElementById('pathsBody');
+                    pBody.innerHTML = '';
+                    if (h.paths) {
+                        Object.entries(h.paths).forEach(([key, info]) => {
+                            const tr = document.createElement('tr');
+                            const badge = info.writable ? '<span class="badge badge-success">OK</span>' : '<span class="badge badge-danger">Erro</span>';
+                            tr.innerHTML = `<td><strong>${key}</strong></td><td>${info.path}</td><td>${badge}</td>`;
+                            pBody.appendChild(tr);
+                        });
+                    }
+                }
+            } catch(e) {}
+        }
+    </script>
+</body>
+</html>
