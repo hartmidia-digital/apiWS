@@ -170,6 +170,11 @@ router.post('/sessions/:id/connect', async (req, res) => {
     const session = Session.findById(id);
     if (!session) return res.status(404).json({ status: 'error', message: 'Sessão não encontrada' });
 
+    // Allow manual connection after a reset by removing from stoppedSessions
+    if (whatsappService.stoppedSessions) {
+        whatsappService.stoppedSessions.delete(id);
+    }
+
     engineLogger.info('session', 'session.connecting', id, 'Comando de conexão iniciado via Ops');
     connectSessionWithCoreCallbacks(id);
 

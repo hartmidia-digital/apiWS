@@ -185,15 +185,18 @@ wss.on('connection', (ws, req) => {
         // We need the session ID from the cookie.
         const cookie = req.headers.cookie;
         if (!cookie || !cookie.includes('connect.sid=')) {
+            console.warn('Ops WebSocket connection rejected: Missing connect.sid cookie');
             ws.close();
             return;
         }
 
-        const sidStr = cookie.split('connect.sid=s%3A')[1]?.split('.')[0];
+        const sidMatch = cookie.match(/connect\.sid=s%3A([^;.]+)/);
+        const sidStr = sidMatch ? decodeURIComponent(sidMatch[1]) : null;
+
         if (sidStr) {
             sessionStore.get(sidStr, (err, sessionData) => {
                 if (err || !sessionData || sessionData.wsToken !== wsToken || sessionData.userRole !== 'admin') {
-                    console.warn('Ops WebSocket connection rejected: Invalid token or role');
+                    console.warn('Ops WebSocket connection rejected: Invalid token, role, or session expired');
                     ws.close();
                     return;
                 }

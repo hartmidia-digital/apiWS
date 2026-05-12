@@ -31,6 +31,8 @@ const logger = pino({ level: process.env.LOG_LEVEL || defaultLogLevel });
 // Active socket connections (in-memory)
 const activeSockets = new Map();
 const retryCounters = new Map();
+const reconnectTimers = new Map();
+const stoppedSessions = new Set();
 
 // Auth directory
 const AUTH_DIR = haxisPaths.authInfo;
@@ -60,9 +62,25 @@ function ensureAuthDir() {
  * @param {function} onEvent - Callback for non-message WhatsApp events
  * @returns {object} Socket connection
  */
-async function connect(sessionId, onUpdate, onMessage, onEvent) {
+async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = false) {
     if (!require('../utils/validation').isValidId(sessionId)) {
         throw new Error('Invalid session ID');
+    }
+
+    if (stoppedSessions.has(sessionId)) {
+        engineLogger.info('session', 'session.connect_aborted', sessionId, 'Tentativa de conexão abortada pois a sessão foi deletada ou parada');
+        return null;
+    }
+
+    const sessionExists = Session.findById(sessionId);
+    if (!sessionExists && !isCreation) {
+        engineLogger.info('session', 'session.connect_aborted', sessionId, 'Tentativa de conexão abortada pois a sessão não existe no banco de dados');
+        return null;
+    }
+
+    if (activeSockets.has(sessionId)) {
+        engineLogger.warn('session', 'session.already_connecting', sessionId, 'Sessão já possui um socket ativo');
+        return activeSockets.get(sessionId);
     }
 
     ensureAuthDir();
@@ -172,13 +190,16 @@ async function connect(sessionId, onUpdate, onMessage, onEvent) {
             const reason = lastDisconnect?.error?.output?.payload?.message || 'Connection closed';
 
             console.log(`[${sessionId}] Disconnected: ${statusCode} - ${reason}`);
-            Session.updateStatus(sessionId, 'DISCONNECTED', reason);
+
+            if (Session.findById(sessionId)) {
+                Session.updateStatus(sessionId, 'DISCONNECTED', reason);
+            }
             if (onUpdate) onUpdate(sessionId, 'DISCONNECTED', reason, null);
 
             // Handle reconnection logic
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 401 && statusCode !== 403;
 
-            if (shouldReconnect) {
+            if (shouldReconnect && !stoppedSessions.has(sessionId) && Session.findById(sessionId)) {
                 engineLogger.warn('session', 'session.disconnected', sessionId, 'Sessão desconectada (tentando reconectar)', { statusCode, reason });
                 const retryCount = (retryCounters.get(sessionId) || 0) + 1;
                 retryCounters.set(sessionId, retryCount);
@@ -186,19 +207,29 @@ async function connect(sessionId, onUpdate, onMessage, onEvent) {
                 if (retryCount <= 5) {
                     console.log(`[${sessionId}] Reconnecting... (attempt ${retryCount})`);
                     engineLogger.info('session', 'session.reconnecting', sessionId, `Tentativa de reconexão (${retryCount}/5)`);
-                    setTimeout(() => connect(sessionId, onUpdate, onMessage, onEvent), 5000);
+
+                    const timer = setTimeout(() => {
+                        if (stoppedSessions.has(sessionId) || !Session.findById(sessionId)) {
+                             engineLogger.info('session', 'session.reconnect_aborted', sessionId, 'Reconexão abortada pois a sessão foi deletada ou parada');
+                             return;
+                        }
+                        connect(sessionId, onUpdate, onMessage, onEvent);
+                    }, 5000);
+                    reconnectTimers.set(sessionId, timer);
                 } else {
                     console.log(`[${sessionId}] Max retries reached`);
                     engineLogger.error('session', 'session.reconnect_failed', sessionId, 'Máximo de tentativas de reconexão atingido', { reason });
                     retryCounters.delete(sessionId);
                 }
             } else {
-                // Clear session data on logout
-                engineLogger.error('session', 'session.logged_out', sessionId, 'Sessão desconectada (Logged Out/Inválida)', { statusCode, reason });
-                if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
-                    console.log(`[${sessionId}] Logged out, cleaning session data`);
-                    if (fs.existsSync(sessionDir)) {
-                        fs.rmSync(sessionDir, { recursive: true, force: true });
+                if (!stoppedSessions.has(sessionId) && statusCode !== undefined) {
+                    // Clear session data on logout
+                    engineLogger.error('session', 'session.logged_out', sessionId, 'Sessão desconectada (Logged Out/Inválida)', { statusCode, reason });
+                    if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+                        console.log(`[${sessionId}] Logged out, cleaning session data`);
+                        if (fs.existsSync(sessionDir)) {
+                            fs.rmSync(sessionDir, { recursive: true, force: true });
+                        }
                     }
                 }
             }
@@ -285,6 +316,11 @@ function disconnect(sessionId) {
         activeSockets.delete(sessionId);
     }
     retryCounters.delete(sessionId);
+
+    if (reconnectTimers.has(sessionId)) {
+        clearTimeout(reconnectTimers.get(sessionId));
+        reconnectTimers.delete(sessionId);
+    }
 }
 
 /**
@@ -315,12 +351,16 @@ function resetSessionAuth(sessionId) {
         return;
     }
 
+    stoppedSessions.add(sessionId);
     disconnect(sessionId);
 
     const sessionDir = path.join(AUTH_DIR, sessionId);
     if (fs.existsSync(sessionDir)) {
         fs.rmSync(sessionDir, { recursive: true, force: true });
     }
+
+    // We allow reconnection manually later, but we need to remove from stopped so that ops panel can connect
+    // The manual removal of stoppedSessions is handled before the actual manual connect
 }
 
 /**
@@ -328,6 +368,7 @@ function resetSessionAuth(sessionId) {
  * @param {string} sessionId - Session ID
  */
 function deleteSessionData(sessionId) {
+    stoppedSessions.add(sessionId);
     resetSessionAuth(sessionId);
     Session.delete(sessionId);
 }
@@ -462,5 +503,6 @@ module.exports = {
     resetSessionAuth,
     deleteSessionData,
     getActiveSessions,
-    AUTH_DIR
+    AUTH_DIR,
+    stoppedSessions
 };
