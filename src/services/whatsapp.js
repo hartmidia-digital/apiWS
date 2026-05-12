@@ -1,4 +1,4 @@
-﻿/**
+/**
  * WhatsApp Service
  * Handles Baileys WhatsApp connection logic
  */
@@ -256,6 +256,12 @@ async function connect(sessionId, onUpdate, onMessage, onEvent) {
     });
 
     sock.ev.on('contacts.update', (updates) => {
+        for (const update of updates || []) {
+            emitEvent('contact.update', update);
+        }
+    });
+
+    sock.ev.on('contacts.upsert', (updates) => {
         for (const update of updates || []) {
             emitEvent('contact.update', update);
         }

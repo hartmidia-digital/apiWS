@@ -1,4 +1,4 @@
-﻿/**
+/**
  * WhatsApp API Server - Main Entry Point
  * Version 3.2.0
  *
@@ -78,7 +78,7 @@ if (process.env.MAX_SESSIONS) {
 
 // Initialize Express
 const app = express();
-app.set('trust proxy', 'loopback');
+app.set('trust proxy', true);
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
@@ -124,7 +124,7 @@ app.use(rateLimit({
     message: { status: 'error', message: 'Too many requests' },
     standardHeaders: true,
     legacyHeaders: false,
-    validate: { trustProxy: false }
+    validate: { trustProxy: true }
 }));
 
 app.use(session({
@@ -399,8 +399,6 @@ app.post('/api/v1/sessions', async (req, res) => {
                 type: 'session-update',
                 data: { sessionId: id, status, detail, qr }
             });
-        }, (id, msg) => {
-            sendWebhook('message.received', id, msg);
         }, (id, eventType, payload) => {
             sendWebhook(eventType, id, payload);
         });
@@ -470,8 +468,6 @@ app.get('/api/v1/sessions/:sessionId/qr', (req, res) => {
             type: 'session-update',
             data: { sessionId: id, status, detail, qr }
         });
-        }, (id, msg) => {
-            sendWebhook('message.received', id, msg);
         }, (id, eventType, payload) => {
             sendWebhook(eventType, id, payload);
         });
