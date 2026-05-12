@@ -226,7 +226,7 @@ router.post('/sessions/:id/connect', async (req, res) => {
 router.post('/sessions/:id/disconnect', async (req, res) => {
     const { id } = req.params;
     engineLogger.info('session', 'session.disconnected', id, 'Comando de desconexão iniciado via Ops');
-    await whatsappService.disconnect(id);
+    await whatsappService.disconnect(id, true);
 
     // Update DB status to disconnected
     Session.updateStatus(id, 'DISCONNECTED', '');

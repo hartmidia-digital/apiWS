@@ -133,7 +133,12 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
     // Store socket reference
     activeSockets.set(sessionId, sock);
 
+    function isSessionOperable() {
+        return !stoppedSessions.has(sessionId) && !!Session.findById(sessionId);
+    }
+
     const emitEvent = (eventType, payload) => {
+        if (!isSessionOperable()) return;
         if (onEvent) {
             onEvent(sessionId, eventType, payload);
         }
@@ -145,10 +150,6 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
     // Handle connection updates
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
-
-        function isSessionOperable() {
-            return !stoppedSessions.has(sessionId) && !!Session.findById(sessionId);
-        }
 
         if (qr) {
             if (!isSessionOperable()) return;
@@ -253,6 +254,7 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
     // Handle incoming messages
     if (onMessage) {
         sock.ev.on('messages.upsert', async (m) => {
+            if (!isSessionOperable()) return;
             for (const msg of m.messages || []) {
                 if (!msg.message || isStatusBroadcastMessage(msg)) {
                     continue;
@@ -320,8 +322,13 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
 /**
  * Disconnect a session
  * @param {string} sessionId - Session ID
+ * @param {boolean} isManual - Is manual disconnect?
  */
-function disconnect(sessionId) {
+function disconnect(sessionId, isManual = false) {
+    if (isManual) {
+        stoppedSessions.add(sessionId);
+    }
+
     const sock = activeSockets.get(sessionId);
     if (sock) {
         sock.end();
