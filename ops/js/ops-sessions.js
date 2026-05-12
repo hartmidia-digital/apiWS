@@ -159,6 +159,34 @@ function openQrModal(id) {
     document.getElementById('qrStatus').textContent = 'Aguardando QR via WebSocket...';
     document.getElementById('qrcode').innerHTML = '<div class="qr-placeholder">Aguardando...</div>';
     document.getElementById('qrModal').classList.add('active');
+
+    // Fallback caso o WebSocket falhe
+    setTimeout(async () => {
+        if (!qrCodeObj && activeQrSession === id) {
+            try {
+                const res = await fetch(`/api/v1/ops/sessions/${id}/qr-current`);
+                const data = await res.json();
+
+                if (data.status === 'success' && data.data && data.data.qr) {
+                    const qrContainer = document.getElementById('qrcode');
+                    qrContainer.innerHTML = '';
+                    document.getElementById('qrStatus').textContent = 'Escaneie o código (Recuperado via Fallback)';
+                    qrCodeObj = new QRCode(qrContainer, {
+                        text: data.data.qr,
+                        width: 256,
+                        height: 256,
+                        colorDark : "#000000",
+                        colorLight : "#ffffff",
+                        correctLevel : QRCode.CorrectLevel.M
+                    });
+                } else {
+                    document.getElementById('qrStatus').textContent = 'QR ainda não gerado, tente reconectar';
+                }
+            } catch(e) {
+                console.error('[Ops WS] Erro ao buscar QR fallback', e);
+            }
+        }
+    }, 3000);
 }
 
 function closeQrModal() {

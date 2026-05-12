@@ -183,15 +183,29 @@ wss.on('connection', (ws, req) => {
 
         // This TODO was flagged by the reviewer. Let's do a basic session lookup!
         // We need the session ID from the cookie.
-        const cookie = req.headers.cookie;
-        if (!cookie || !cookie.includes('connect.sid=')) {
-            console.warn('Ops WebSocket connection rejected: Missing connect.sid cookie');
-            ws.close();
-            return;
+        function extractSessionIdFromCookie(cookieHeader) {
+            try {
+                if (!cookieHeader) return null;
+
+                const cookies = cookieHeader.split(';').map(c => c.trim());
+                const rawConnectSid = cookies.find(c => c.startsWith('connect.sid='));
+                if (!rawConnectSid) return null;
+
+                let value = rawConnectSid.substring('connect.sid='.length);
+                value = decodeURIComponent(value);
+
+                if (value.startsWith('s:')) {
+                    value = value.substring(2);
+                }
+
+                return value.split('.')[0] || null;
+            } catch (error) {
+                console.warn('[Ops WS] Cookie de sessão inválido ou malformado');
+                return null;
+            }
         }
 
-        const sidMatch = cookie.match(/connect\.sid=s%3A([^;.]+)/);
-        const sidStr = sidMatch ? decodeURIComponent(sidMatch[1]) : null;
+        const sidStr = extractSessionIdFromCookie(req.headers.cookie);
 
         if (sidStr) {
             sessionStore.get(sidStr, (err, sessionData) => {

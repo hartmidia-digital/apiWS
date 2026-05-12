@@ -146,7 +146,12 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
 
+        function isSessionOperable() {
+            return !stoppedSessions.has(sessionId) && !!Session.findById(sessionId);
+        }
+
         if (qr) {
+            if (!isSessionOperable()) return;
             Session.updateStatus(sessionId, 'GENERATING_QR', 'Scan QR code');
             engineLogger.info('session', 'session.qr_generated', sessionId, 'QR Code gerado (não persistido)');
             if (onUpdate) onUpdate(sessionId, 'GENERATING_QR', 'Scan QR code', qr);
@@ -162,12 +167,14 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
         }
 
         if (connection === 'connecting') {
+            if (!isSessionOperable()) return;
             Session.updateStatus(sessionId, 'CONNECTING', 'Connecting...');
             engineLogger.info('session', 'session.connecting', sessionId, 'Tentando conectar...');
             if (onUpdate) onUpdate(sessionId, 'CONNECTING', 'Connecting...', null);
         }
 
         if (connection === 'open') {
+            if (!isSessionOperable()) return;
             console.log(`[${sessionId}] Connected!`);
             retryCounters.delete(sessionId);
 
@@ -191,6 +198,11 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
 
             console.log(`[${sessionId}] Disconnected: ${statusCode} - ${reason}`);
 
+            if (!isSessionOperable()) {
+                activeSockets.delete(sessionId);
+                return;
+            }
+
             if (Session.findById(sessionId)) {
                 Session.updateStatus(sessionId, 'DISCONNECTED', reason);
             }
@@ -199,7 +211,7 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
             // Handle reconnection logic
             const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 401 && statusCode !== 403;
 
-            if (shouldReconnect && !stoppedSessions.has(sessionId) && Session.findById(sessionId)) {
+            if (shouldReconnect && isSessionOperable()) {
                 engineLogger.warn('session', 'session.disconnected', sessionId, 'Sessão desconectada (tentando reconectar)', { statusCode, reason });
                 const retryCount = (retryCounters.get(sessionId) || 0) + 1;
                 retryCounters.set(sessionId, retryCount);
@@ -209,7 +221,7 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
                     engineLogger.info('session', 'session.reconnecting', sessionId, `Tentativa de reconexão (${retryCount}/5)`);
 
                     const timer = setTimeout(() => {
-                        if (stoppedSessions.has(sessionId) || !Session.findById(sessionId)) {
+                        if (!isSessionOperable()) {
                              engineLogger.info('session', 'session.reconnect_aborted', sessionId, 'Reconexão abortada pois a sessão foi deletada ou parada');
                              return;
                         }
@@ -222,7 +234,7 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
                     retryCounters.delete(sessionId);
                 }
             } else {
-                if (!stoppedSessions.has(sessionId) && statusCode !== undefined) {
+                if (isSessionOperable() && statusCode !== undefined) {
                     // Clear session data on logout
                     engineLogger.error('session', 'session.logged_out', sessionId, 'Sessão desconectada (Logged Out/Inválida)', { statusCode, reason });
                     if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
@@ -495,6 +507,14 @@ async function attachMediaAsset(sock, msg) {
     }
 }
 
+function clearStoppedSession(sessionId) {
+    stoppedSessions.delete(sessionId);
+}
+
+function isSessionStopped(sessionId) {
+    return stoppedSessions.has(sessionId);
+}
+
 module.exports = {
     connect,
     disconnect,
@@ -504,5 +524,6 @@ module.exports = {
     deleteSessionData,
     getActiveSessions,
     AUTH_DIR,
-    stoppedSessions
+    clearStoppedSession,
+    isSessionStopped
 };
