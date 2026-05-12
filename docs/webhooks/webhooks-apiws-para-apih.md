@@ -1,36 +1,31 @@
 # Webhooks ApiWS → APIH
 
 ## 1. Objetivo
-O motor WhatsApp Web (`api.useb.ws`) envia webhooks assíncronos e fire-and-forget para a API Limpa (APIH). O objetivo principal é repassar os eventos em tempo real do Baileys para o cérebro (APIH/HAXIS) para que este processe, salve no banco, acione gatilhos de CRM, fluxos de IA ou respostas.
+O motor WhatsApp Web (`api.useb.ws` / ApiWS) envia webhooks assíncronos e `fire-and-forget` para a API Limpa (APIH/Gateway). O objetivo principal é repassar os eventos em tempo real do Baileys para o Gateway processá-los.
 
 ## 2. Fluxo
 O evento entra pelo WebSocket do Baileys e sai por POST (Axios) em direção à API Limpa.
 **WhatsApp** → (WebSocket) → **ApiWS** → (POST HTTP) → **APIH** → (Filas/Processamento) → **HAXIS**
 
-## 3. URL de destino
-Configurada no `.env` do ApiWS através da variável:
-`WEBHOOK_URL` (Exemplo fictício: `https://api.empresa.com/engine-webhook`)
+## 3. Configuração de Destino
+Configurada no `.env` (ou ambiente cPanel) através das variáveis:
+- `WEBHOOK_URL` (URL destino)
+- `WEBHOOK_SECRET` (Segredo de assinatura)
+- `WEBHOOK_TIMEOUT_MS` (Timeout, padrão 5000ms)
 
-*Nota: Não versionar segredos. O `.env.example` lista a chave sem revelar o segredo em produção.*
+## 4. Autenticação e Headers (HMAC-SHA256)
+O ApiWS possui uma chave (`WEBHOOK_SECRET`). Toda vez que emite o evento para a APIH, ele criptografa/assina o Body e insere a assinatura nos headers:
 
-## 4. Autenticação
-O ApiWS possui uma chave configurada em `.env` (a `WEBHOOK_SECRET`). Toda vez que ele emite o evento para a APIH, ele criptografa/assina o Body usando essa chave e insere isso nos cabeçalhos (Headers) da requisição.
-
-O APIH do outro lado deve ler o body e recriar o hash HMAC-SHA256 usando o mesmo secret conhecido. Se bater, é autêntico.
-
-**Headers enviados pelo ApiWS:**
-- `X-Haxis-Event-Id`: Um UUIDv4 único da emissão para a APIH ignorar webhooks repetidos.
+**Headers enviados:**
+- `X-Haxis-Event-Id`: Um UUID único para evitar duplicações/idempotência.
 - `X-Haxis-Event-Type`: String com o tipo do evento (ex: `message.received`).
-- `X-Haxis-Timestamp`: ISO 8601 Timestamp de quando o ApiWS montou a requisição.
-- `X-Haxis-Signature`: A assinatura gerada (`crypto.createHmac('sha256', WEBHOOK_SECRET).update(payloadString).digest('hex')`).
+- `X-Haxis-Timestamp`: ISO 8601 Timestamp de quando a requisição foi montada.
+- `X-Haxis-Signature`: A assinatura HMAC-SHA256.
 
-## 5. Payloads
-O Payload enviado em JSON tenta enviar a formatação bruta do Baileys e um resumo simplificado. Em novas arquiteturas de multi-instalação da ApiWS, também adicionamos a identificação de origem (`engine_id` e `engine_base_url`), permitindo que a APIH resolva corretamente de que servidor esta sessão pertence.
-A combinação da origem (`engine_id`) e da sessão interna (`engine_session_id`) resolve conflitos entre múltiplas instâncias e separa contextos entre locatários (tenants) no APIH.
-O payload inteiro é assinado utilizando o HMAC, garantindo a proteção contra falsificações (tampering).
-*(Para aprofundamento, leia [Integração HAXIS APIH: Identidade Operacional e Engine ID](./integracao-apih-engine-id.md))*
+## 5. Payloads e Identificação
+Os payloads incluem a origem (`engine_id` e `engine_base_url`) definidos nas variáveis de ambiente. Isso permite à APIH saber de qual motor a requisição está vindo quando há múltiplas instâncias em balanceamento.
 
-**Exemplo Fictício (Anonimizado) de `message.received`:**
+**Exemplo Base (eventos de mensagens baseados no utilitário de webhooks do código):**
 ```json
 {
   "event_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -41,44 +36,24 @@ O payload inteiro é assinado utilizando o HMAC, garantindo a proteção contra 
   "timestamp": "2026-05-03T10:00:00.000Z",
   "raw_payload": {
     "key": {
-      "remoteJid": "5511999999999@s.whatsapp.net",
-      "fromMe": false,
-      "id": "3EB0XXXXX..."
+      "remoteJid": "5511999999999@s.whatsapp.net"
     },
-    "message": {
-      "conversation": "Olá, queria ver os planos!"
-    },
-    "pushName": "João Cliente"
+    "message": {}
   },
-  "normalized_preview": {
-    "from": "5511999999999@s.whatsapp.net",
-    "participant": "",
-    "pushName": "João Cliente",
-    "messageId": "3EB0XXXXX...",
-    "type": "conversation",
-    "text": "Olá, queria ver os planos!",
-    "hasMedia": false,
-    "hasLocation": false
-  }
+  "normalized_preview": {}
 }
 ```
 
-## 6. Eventos Suportados
-O motor observa os sockets do Baileys e mapeia para strings de `event_type`:
+## 6. O Evento de Teste (`webhook.test`)
+O Console Operacional (`/ops`) expõe um recurso visual para validar o envio de webhooks via rota `POST /api/v1/ops/webhooks/test`.
+O payload gerado possui o evento tipo `webhook.test` e o envio é aguardado na requisição (diferente do fluxo fire-and-forget nativo).
+O resultado desse envio (falha ou sucesso, e o tempo levado - `durationMs`) é impresso na interface de Integração para auditoria do sysadmin.
 
-1. `session.status`: Emitido em mudanças de conexão (QR Code, conectado, desconectado).
-2. `message.received`: A mensagem do chat chegou (Texto, Áudio, Foto).
-3. `message.status`: Atualizações (Enviado, Recebido pelo aparelho do cliente, Lido, Áudio escutado).
-4. `message.deleted`: Quando o cliente revoga (apaga para todos).
-5. `message.edited`: Quando o cliente edita uma mensagem enviada recentemente.
-6. `contact.update`: Atualização do nome de contato.
-7. `group.update`: Atualização de informações de um grupo.
-8. `group.participants.update`: Alguém entrou ou saiu de um grupo em que a sessão do ApiWS está.
+## 7. Eventos Padrões Suportados
+1. `session.status`: Emitido na troca de estado da conexão (conectado, desconectado, aguardando qr).
+2. `message.received`: Mensagem do chat chegou.
+3. Eventos estendidos de status e chats (dependendo do mapping direto implementado em `whatsappService`).
 
-## 7. Falhas e Tratamento (Retries)
-Atualmente, se o webhook para a APIH der falha por conta de Timeout (`WEBHOOK_TIMEOUT_MS`) ou a APIH retornar Erro Interno (500), o sistema ApiWS irá apenas **gerar um Log no console de error** (ex: `[ERROR] Falha ao enviar webhook message.received: timeout exceeded`).
-**Não existe Fila de Retry persistente implementada.** (O processo é fire-and-forget para não travar a recepção de milhares de mensagens por minuto). Se for mandatório, a arquitetura deverá evoluir e isso fica marcado como Risco e Pendência técnica.
-
-## 8. Pendências
-- Testar e simular as respostas em uma bateria de carga para assegurar que se a APIH engasgar (Rate Limit/429 ou 500 demorados) os Sockets do Baileys não causarão OutOfMemory na thread principal do NodeJS no cPanel.
-- Criar a camada de upload de mídia antecipada `APIH_MEDIA_UPLOAD_URL` na própria APIH e documentar este handshake para download eficiente.
+## 8. Tratamento de Falhas
+- **Fire-and-forget:** O ApiWS não armazena eventos na fila em caso de falha de conexão com a APIH (erro 500, timeout).
+- **Log Persistente:** Se a requisição falha (ou se o timeout expira), o evento aciona o logger, salvando na tabela `engine_logs` (categoria `webhook`, evento `webhook.dispatch_failed`), o que fica visível no `/ops/live-logs.html` e na tela Integration, alertando o sysadmin que o HAXIS está inoperante.

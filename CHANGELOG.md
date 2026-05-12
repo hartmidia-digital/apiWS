@@ -3,6 +3,18 @@
 Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 
 ## [Unreleased]
+
+### Documentação (Auditoria Refinada Pré-Remoção do `/admin`)
+- **Regra da Fonte da Verdade:** O `README.md` e a documentação (`/docs`) foram ajustados para estabelecer que o código da branch `main` é a fonte definitiva da verdade técnica. A documentação agora atua como guia que deve refletir fielmente o código.
+- **Console Ops vs Painel Legado:** Diferenciados oficialmente na documentação os propósitos do `/ops` (Console Operacional Técnico e Definitivo) e `/admin` (Painel Comercial Legado, marcado como "Transicional").
+- **Mapeamento de Rotas (`docs/api/rotas-apiws.md`):** Criada documentação com o inventário real das rotas ativas (Ops, API interna, Auth, Legado) de acordo com o código fonte atual.
+- **Planejamento de Remoção do `/admin`:** Criada a análise aprofundada de arquivos legados (`docs/legado/painel-admin-legado.md`) e elaborado um plano em 5 fases para a remoção futura e segura do painel antigo (`docs/planejamento/plano-remocao-admin-legado-apiws.md`).
+- **Segurança e Variáveis de Ambiente:** Mapeadas com exatidão as variáveis de ambiente baseadas no código (`docs/configuracao/variaveis-ambiente-apiws.md`), corrigidos termos (ex: `JWT` para tokens seriais) em `docs/seguranca/seguranca-apiws.md`.
+- **Logs e WebSocket:** Documentada a volatilidade do QR Code (memória apenas) e os endpoints transicionais versus oficiais em `/ops/ws` (`docs/api/websocket-apiws.md` e `docs/operacao/logs-observabilidade-apiws.md`).
+- **Banco SQLite (`docs/banco/sqlite-apiws.md`):** Tabela de schemas documentada com alertas a respeito do crescimento natural dos logs no banco (WAL mode).
+- **Matriz de Prontidão:** Tabela comparativa do `/ops` versus `/admin` destacando que os módulos de autenticação são a única dependência restante no sistema (`docs/auditorias/matriz-prontidao-remocao-admin.md`).
+- **Relatório Refinado:** Síntese final com status da documentação pré-remoção (`docs/auditorias/relatorio-refinado-consistencia-apiws.md`).
+
 ### Added
 - **Console Operacional (`/ops`)**: Novo painel exclusivo para diagnóstico do motor WhatsApp, separado do dashboard `/admin`.
 - **Telas Inclusas**:

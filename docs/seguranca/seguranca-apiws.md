@@ -1,44 +1,43 @@
 # Segurança — ApiWS
 
+Este documento estabelece as diretrizes e regras de segurança oficiais para o motor ApiWS, validando a proteção dos endpoints, autenticação e dados persistidos.
+
 ## 1. Endpoints Sensíveis e Autenticação
 Quase todas as operações no motor são restritas e expostas sob rotas da API versão 1 (`/api/v1/`).
 
-- **Criação de Sessão** (`POST /api/v1/sessions`): Protegida exclusivamente pela chave mestra (`MASTER_API_KEY`) passada através do header `X-Master-Key`, ou pela sessão via cookie logado no Dashboard de Admin.
-- **Operação de Mensagens e Mídia**: Protegidas por **Bearer Tokens**. Quando uma sessão é criada, ela gera um token no formato JWT/Hex. Esse token deve estar no cabeçalho de todas as requisições que operam em nome daquela sessão (`Authorization: Bearer <token>`).
-- **Dashboard Técnico**: A interface web em `/admin` e gerida através de sessão de cookie firmada com login. A senha exigida no login equivale a variável de ambiente `ADMIN_DASHBOARD_PASSWORD`.
+- **Criação e Controle de Sessão via API Interna:** Protegidas por **Bearer Tokens** (Tokens seriais únicos gerados na criação, não são necessariamente JWTs complexos) gerados na inicialização ou pela chave mestra (`MASTER_API_KEY`) passada através do header `X-Master-Key`. Esse token deve estar no cabeçalho de todas as requisições server-to-server (`Authorization: Bearer <token>`).
+- **Console Operacional (`/ops`):** Protegido através de sessão de cookie (`session-file-store` ou memória persistente) firmada com login. A senha exigida na rota transicional de login (`/admin/login.html`) equivale à variável de ambiente `ADMIN_DASHBOARD_PASSWORD`.
+- **Rotas Legadas (`/admin`):** Seguem o mesmo modelo de cookie da sessão, porém encontram-se em fase transicional/obsoleta e não devem ser estendidas.
 
 ## 2. Risco de Exposição de QR Code
 Um QR Code de WhatsApp exposto na web pode permitir que um invasor tome controle do número celular como se fosse um dispositivo oficial vinculado (WhatsApp Web).
-- O QR Code só é fornecido se a requisição provir de uma API logada via Master Key, Bearer ou via socket logado no dashboard técnico (onde o administrador tem a visão do QR Code).
-- Nunca expor o endpoint de QR Code sem middleware de autenticação.
+- O QR Code só é fornecido se a requisição provir de uma API logada (Master Key, Bearer) ou via WebSocket autenticado no console operacional `/ops/ws` (onde o sysadmin tem a visão do QR Code).
+- O QR Code é tratado como dado **efêmero**: transita na rede mas nunca é persistido no banco SQLite nem nos arquivos físicos de log.
 
 ## 3. Risco de Envio de Mensagens por Endpoint Público
-As rotas como `/legacy/send-message` e `/api/v1/messages` têm um rate limiter mais agressivo. Um vazamento do token Bearer permitiria um envio não autorizado.
-- É mandatório manter o token JWT isolado do lado cliente (frontend). Ele deve apenas ser custodiado pelo HAXIS/APIH, que assinará e baterá no ApiWS pelo backend (server-to-server).
+- O token Bearer deve permanecer isolado do lado cliente (frontend). Ele é custodiado pelo ecossistema HAXIS (APIH), que assinará e baterá no ApiWS pelo backend (server-to-server).
 
-## 4. Risco de Vazamento de Sessão e Tokens em Disco
-- O ApiWS salva tokens num arquivo serializado/encriptado em disco para persistência entre reboots (no `database/whatsapp.db` ou `.enc`). Para isso, usa encriptação simétrica via `AES-256-CBC`.
-- Essa encriptação requer a `TOKEN_ENCRYPTION_KEY` definida no `.env`.
-- As subpastas de sessão do `@whiskeysockets/baileys` (`auth_info_baileys`) devem sempre ficar **fora do public_html** e serem bloqueadas por regras de webserver (ex. `.htaccess`).
+## 4. Persistência Segura e Isolamento de Diretórios
+- As subpastas de sessão do `@whiskeysockets/baileys` (`auth_info_baileys`), bem como a pasta `media`, `logs` e `database` (SQLite) devem sempre ficar **isoladas do `public_html`**.
+- O projeto conta com um `.htaccess` na raiz para bloquear tentativas de requisição direta a arquivos sensíveis, porém o deploy via cPanel `Node.js App` já garante por padrão que a execução do código fonte permaneça em diretório não exposto.
+- O SQLite e demais diretórios seguem o caminho definido em `DATA_PATH` (ver `/src/config/paths.js`).
 
-## 5. Regras do .env
-1. O `.env` nunca deve ser versão. Existe apenas `.env.example` no git.
-2. Em produção via cPanel (setup preferido do HAXIS), as variáveis de ambiente não são postas via arquivo `.env`, mas sim cadastradas pela **Interface Gráfica do "Setup Node.js App"**. Isso evita leitura local se um LFI (Local File Inclusion) acontecer no docroot.
+## 5. Regras do .env e Variáveis
+1. Nunca versionar o `.env`. Existe apenas `.env.example` no git.
+2. Em produção, variáveis sensíveis como `TOKEN_ENCRYPTION_KEY`, `SESSION_SECRET` e `ADMIN_DASHBOARD_PASSWORD` devem ser injetadas de forma segura (geralmente pelo Setup Node.js App do cPanel).
+3. `COOKIE_SECURE` deve estar `true` em produção sob HTTPS para impedir interceptação da sessão técnica.
 
-## 6. Regras para Logs
-O logger base (`Pino`) guarda dumps e logs.
-- Nenhum webhook payload inteiro deve conter dump do *Auth State* (Keys, AES, Mac).
-- Se for preciso realizar logs de debug das chaves para trouble shooting, remova assim que resolvido.
+## 6. Regras de Logs e Mascaramento
+O `engineLogger.js` atua sanitizando tudo antes da persistência:
+- Mensagens de chat, conteúdo binário ou metadados de webhook não são salvos nos logs estruturados.
+- Números de telefone, chaves e tokens são mascarados no log e no `/ops`.
 
-## 7. Versionamento
-1. Nunca suba o diretório de dados para o GIT (`node_modules/`, `logs/`, `auth_info_baileys/`, `database/`, etc). Eles devem constar rigorosamente no `.gitignore`.
-2. Caso por engano um folder de credencial vá para um commit público do GitHub, a chave mestra das credenciais precisará ser girada (logoff do dispositivo no aparelho) na mesma hora.
+## 7. Versionamento Rigoroso
+1. Diretórios de dados (`auth_info_baileys/`, `database/`, arquivos SQLite) e os logs nunca devem ser commitados.
+2. O arquivo `.gitignore` atua como barreira fundamental.
 
-## 8. Disparador em Massa (Spam) e Rate Limiting
-- Use os mecanismos `SEND_RATE_LIMIT_MAX_REQUESTS` e limites similares.
-- O motor não possui validação de conteúdo. Enviar mil mensagens iguais por minuto acarretará um banimento do número feito diretamente pelas heurísticas nativas do WhatsApp/Meta, não pelo sistema. A moderação das filas (`Rate Limiting` comportamental) deve ocorrer na camada de **APIH/HAXIS**, e não no engine.
+## 8. Webhooks (APIWS → APIH)
+- A comunicação com o HAXIS é assinada via HMAC-SHA256 (`X-Haxis-Signature`). Apenas quem possuir a chave `WEBHOOK_SECRET` pode gerar ou validar a autenticidade dos dados gerados por este motor.
 
 ## 9. Recomendações Futuras (Backlog de Segurança)
-- Implementar checagens de integridade contra injeções XSS nos dados vindos pelo Baileys antes do display no Dashboard.
-- Revezamento automático (rotate) dos Segredos do JWT de sessões se ficarem obsoletos.
-- Firewall restritivo no nível do WHM/cPanel apenas permitindo os IPs do APIH de acessar a porta/domínio do ApiWS.
+- Implementar limitação restritiva em nível WHM/cPanel (Firewall L7/IP) permitindo apenas que os IPs do Gateway HAXIS consumam os endpoints em `/api/v1/`.
