@@ -183,17 +183,34 @@ wss.on('connection', (ws, req) => {
 
         // This TODO was flagged by the reviewer. Let's do a basic session lookup!
         // We need the session ID from the cookie.
-        const cookie = req.headers.cookie;
-        if (!cookie || !cookie.includes('connect.sid=')) {
-            ws.close();
-            return;
+        function extractSessionIdFromCookie(cookieHeader) {
+            try {
+                if (!cookieHeader) return null;
+
+                const cookies = cookieHeader.split(';').map(c => c.trim());
+                const rawConnectSid = cookies.find(c => c.startsWith('connect.sid='));
+                if (!rawConnectSid) return null;
+
+                let value = rawConnectSid.substring('connect.sid='.length);
+                value = decodeURIComponent(value);
+
+                if (value.startsWith('s:')) {
+                    value = value.substring(2);
+                }
+
+                return value.split('.')[0] || null;
+            } catch (error) {
+                console.warn('[Ops WS] Cookie de sessão inválido ou malformado');
+                return null;
+            }
         }
 
-        const sidStr = cookie.split('connect.sid=s%3A')[1]?.split('.')[0];
+        const sidStr = extractSessionIdFromCookie(req.headers.cookie);
+
         if (sidStr) {
             sessionStore.get(sidStr, (err, sessionData) => {
                 if (err || !sessionData || sessionData.wsToken !== wsToken || sessionData.userRole !== 'admin') {
-                    console.warn('Ops WebSocket connection rejected: Invalid token or role');
+                    console.warn('Ops WebSocket connection rejected: Invalid token, role, or session expired');
                     ws.close();
                     return;
                 }
