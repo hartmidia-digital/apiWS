@@ -159,6 +159,34 @@ function openQrModal(id) {
     document.getElementById('qrStatus').textContent = 'Aguardando QR via WebSocket...';
     document.getElementById('qrcode').innerHTML = '<div class="qr-placeholder">Aguardando...</div>';
     document.getElementById('qrModal').classList.add('active');
+
+    // Fallback caso o WebSocket falhe
+    setTimeout(async () => {
+        if (!qrCodeObj && activeQrSession === id) {
+            try {
+                const res = await fetch(`/api/v1/ops/sessions/${id}/qr-current`);
+                const data = await res.json();
+
+                if (data.status === 'success' && data.data && data.data.qr) {
+                    const qrContainer = document.getElementById('qrcode');
+                    qrContainer.innerHTML = '';
+                    document.getElementById('qrStatus').textContent = 'Escaneie o código (Recuperado via Fallback)';
+                    qrCodeObj = new QRCode(qrContainer, {
+                        text: data.data.qr,
+                        width: 256,
+                        height: 256,
+                        colorDark : "#000000",
+                        colorLight : "#ffffff",
+                        correctLevel : QRCode.CorrectLevel.M
+                    });
+                } else {
+                    document.getElementById('qrStatus').textContent = 'QR ainda não gerado, tente reconectar';
+                }
+            } catch(e) {
+                console.error('[Ops WS] Erro ao buscar QR fallback', e);
+            }
+        }
+    }, 3000);
 }
 
 function closeQrModal() {
@@ -179,6 +207,14 @@ function connectWebSocket(token) {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ops/ws?token=${token}`);
 
+    ws.onopen = () => {
+        console.log('[Ops WS] Conectado ao WebSocket');
+        const headerTitle = document.querySelector('.topbar h1');
+        if (headerTitle) {
+            headerTitle.innerHTML = 'Sessões WhatsApp <span class="badge badge-success" style="font-size: 0.5em; vertical-align: middle;">WS Online</span>';
+        }
+    };
+
     ws.onmessage = (event) => {
         try {
             const payload = JSON.parse(event.data);
@@ -189,20 +225,34 @@ function connectWebSocket(token) {
                 const qrContainer = document.getElementById('qrcode');
                 qrContainer.innerHTML = '';
                 document.getElementById('qrStatus').textContent = 'Escaneie o código';
-                qrCodeObj = new QRCode(qrContainer, {
-                    text: payload.qr,
-                    width: 256,
-                    height: 256,
-                    colorDark : "#000000",
-                    colorLight : "#ffffff",
-                    correctLevel : QRCode.CorrectLevel.M
-                });
+                try {
+                    qrCodeObj = new QRCode(qrContainer, {
+                        text: payload.qr,
+                        width: 256,
+                        height: 256,
+                        colorDark : "#000000",
+                        colorLight : "#ffffff",
+                        correctLevel : QRCode.CorrectLevel.M
+                    });
+                } catch (qrErr) {
+                    console.error('[Ops WS] Erro ao renderizar QR', qrErr);
+                    document.getElementById('qrStatus').textContent = 'Erro ao renderizar QR. Verifique o console.';
+                }
             }
             if (payload.event === 'session.connected' && activeQrSession === payload.sessionId) {
                 document.getElementById('qrStatus').textContent = 'CONECTADO!';
                 setTimeout(closeQrModal, 1500);
             }
-        } catch(e) {}
+        } catch(e) {
+            console.error('[Ops WS] Erro ao processar mensagem do WebSocket', e);
+        }
     };
-    ws.onclose = () => { setTimeout(() => connectWebSocket(token), 3000); };
+    ws.onclose = () => {
+        console.warn('[Ops WS] WebSocket desconectado. Tentando reconectar...');
+        const headerTitle = document.querySelector('.topbar h1');
+        if (headerTitle) {
+            headerTitle.innerHTML = 'Sessões WhatsApp <span class="badge badge-danger" style="font-size: 0.5em; vertical-align: middle;">WS Offline</span>';
+        }
+        setTimeout(() => connectWebSocket(token), 3000);
+    };
 }

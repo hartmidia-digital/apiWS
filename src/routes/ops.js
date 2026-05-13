@@ -144,8 +144,21 @@ router.post('/sessions', async (req, res) => {
     }
 });
 
+const currentQrBySession = new Map();
+
 function connectSessionWithCoreCallbacks(sessionId) {
     whatsappService.connect(sessionId, (id, status, detail, qr) => {
+        if (qr) {
+            currentQrBySession.set(id, { qr, createdAt: Date.now() });
+
+            // Clean up old QRs (TTL > 60s)
+            for (const [key, value] of currentQrBySession.entries()) {
+                if (Date.now() - value.createdAt > 60000) {
+                    currentQrBySession.delete(key);
+                }
+            }
+        }
+
         Session.updateStatus(id, status, detail);
         sendWebhook('session.status', id, { status, detail, state: status });
         const wss = engineLogger.wssInstance;
@@ -163,12 +176,43 @@ function connectSessionWithCoreCallbacks(sessionId) {
 }
 
 /**
+ * GET /api/v1/ops/sessions/:id/qr-current
+ * Fetch current valid QR code if WebSocket failed to deliver
+ */
+router.get('/sessions/:id/qr-current', (req, res) => {
+    const { id } = req.params;
+    const session = Session.findById(id);
+    if (!session) return res.status(404).json({ status: 'error', message: 'Sessão não encontrada' });
+
+    // We can assume session is stopped if it's not connected and status is not connecting
+    if (session.status === 'DISCONNECTED' && whatsappService.isSessionStopped && whatsappService.isSessionStopped(id)) {
+         return res.status(404).json({ status: 'error', message: 'Sessão deletada ou parada' });
+    }
+
+    const qrData = currentQrBySession.get(id);
+    if (qrData && Date.now() - qrData.createdAt < 60000) {
+        return res.json({ status: 'success', data: { qr: qrData.qr } });
+    }
+
+    return res.status(404).json({ status: 'error', message: 'QR Code expirado ou não gerado' });
+});
+
+/**
  * POST /api/v1/ops/sessions/:id/connect
  */
 router.post('/sessions/:id/connect', async (req, res) => {
     const { id } = req.params;
     const session = Session.findById(id);
     if (!session) return res.status(404).json({ status: 'error', message: 'Sessão não encontrada' });
+
+    if (session.status === 'CONNECTING' || session.status === 'GENERATING_QR' || whatsappService.isConnected(id)) {
+        return res.status(409).json({ status: 'error', message: 'Sessão já está em processo de conexão' });
+    }
+
+    // Allow manual connection after a reset by removing from stoppedSessions
+    if (whatsappService.clearStoppedSession) {
+        whatsappService.clearStoppedSession(id);
+    }
 
     engineLogger.info('session', 'session.connecting', id, 'Comando de conexão iniciado via Ops');
     connectSessionWithCoreCallbacks(id);
@@ -182,7 +226,7 @@ router.post('/sessions/:id/connect', async (req, res) => {
 router.post('/sessions/:id/disconnect', async (req, res) => {
     const { id } = req.params;
     engineLogger.info('session', 'session.disconnected', id, 'Comando de desconexão iniciado via Ops');
-    await whatsappService.disconnect(id);
+    await whatsappService.disconnect(id, true);
 
     // Update DB status to disconnected
     Session.updateStatus(id, 'DISCONNECTED', '');
