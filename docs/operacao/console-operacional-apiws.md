@@ -32,6 +32,13 @@ O painel está acessível pela rota `/ops`. O acesso exige:
 5. **Saúde (`/ops/health.html`):** Status de Permissões e integridade de variáveis `.env` críticas (Nunca exibe `MASTER_API_KEY` ou `SESSION_SECRET`).
 6. **Integração (`/ops/integration.html`):** Permite disparar um webhook neutro (`webhook.test`) contra o APIH para avaliar o tempo de resposta e integridade da conexão.
 
+## Diagnóstico de Versão e Validação (WhatsApp Web vs Baileys)
+Para investigar problemas de incompatibilidade de versão (ex: WhatsApp alertando que mensagens foram enviadas por "versão antiga"):
+- **Onde consultar a versão usada pelo motor:** Acesse a rota de **Saúde (`/ops/health.html`)**. Ela exibe as propriedades `baileysVersion` e `browserIdentity` que o motor está forçando.
+- **Consultar logs de conexão:** Acesse **Histórico de Eventos (`/ops/events.html`)** ou **Logs ao Vivo** e busque por eventos de inicialização do socket. Os detalhes seguros incluirão `waVersion`, `versionOrigin` e a identidade de navegador configurada.
+- **Validação de envio outbound técnica:** A validação técnica consiste em verificar se o ApiWS devolve um `messageId` para um disparo à rota `/api/v1/messages` (confirmando que o socket aceitou o envio) sem quebrar as propriedades dos webhooks (como `engine_id`).
+- **Validação de envio manual no celular:** A validação técnica não garante a ausência do alerta visual no app. A validação manual (homologação visual) no aparelho do destinatário é imprescindível para confirmar que o aviso de versão não aparece mais.
+
 ## Regras de Logs e Privacidade
 Por segurança e performance:
 - Nenhum QR Code é persistido em logs de disco ou banco. O QR transita em memória apenas durante o pareamento, via WebSocket de forma efêmera.
