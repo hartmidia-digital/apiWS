@@ -21,7 +21,7 @@
   "license": "MIT",
   "dependencies": {
     "@hapi/boom": "^10.0.1",
-    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "@whiskeysockets/baileys": "^7.0.0-rc11",
     "axios": "^1.13.5",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^12.5.0",
