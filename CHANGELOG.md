@@ -3,7 +3,15 @@
 Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 
 ## [Unreleased]
+### Fixes & Compatibility (Compatibilidade WA Web/Baileys)
+- Atualização da versão do pacote `@whiskeysockets/baileys` de `^7.0.0-rc.9` para `^7.0.0-rc11` e ajustes de compatibilidade para resolver o problema onde o WhatsApp marcava mensagens como enviadas por "versão antiga".
+- Remoção do uso forçado de `fetchLatestWaWebVersion()` devido a possíveis desalinhamentos com os protobufs do Baileys. A prioridade agora é o `fetchLatestBaileysVersion()`, com fallback automático.
+- Ajuste no `Browser Identity` alterando de `Ubuntu, Chrome` para `Mac OS, Desktop` buscando diminuir flags de incompatibilidade e suspeitas pelo WhatsApp Web.
+
 ### Added
+- **Logs Operacionais Seguros:** Adicionados logs de diagnóstico seguros com `engineLogger` na inicialização do socket em `whatsapp.js`, exibindo a versão efetivamente utilizada do WA Web e a versão do pacote Baileys.
+- Endpoint `/api/v1/ops/health` enriquecido para retornar informações de `baileysVersion` e `browserIdentity` no diagnóstico operacional.
+
 - **Console Operacional (`/ops`)**: Novo painel exclusivo para diagnóstico do motor WhatsApp, separado do dashboard `/admin`.
 - **Telas Inclusas**:
   - Visão Geral (status do motor, uptime, ambiente, mem).

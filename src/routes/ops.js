@@ -73,6 +73,8 @@ router.get('/health', (req, res) => {
         };
     }
 
+    const pkg = require('../../package.json');
+
     res.json({
         status: 'success',
         data: {
@@ -86,6 +88,8 @@ router.get('/health', (req, res) => {
             maxSessions: process.env.MAX_SESSIONS || 5,
             sessionsInDb: dbSessions.length,
             sessionsInMemory: activeSessions.size,
+            baileysVersion: pkg.dependencies['@whiskeysockets/baileys'],
+            browserIdentity: 'Mac OS, Desktop',
             paths: pathsStatus
         }
     });

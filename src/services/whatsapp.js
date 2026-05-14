@@ -98,14 +98,15 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
 
     // Get latest WA version (with fallback)
     let version;
+    let versionOrigin;
     try {
-        const waVersion = await fetchLatestWaWebVersion({});
-        version = waVersion.version;
-        console.log(`[${sessionId}] Using WA Web version: ${version.join('.')}`);
-    } catch (e) {
         const baileysVersion = await fetchLatestBaileysVersion();
         version = baileysVersion.version;
-        console.log(`[${sessionId}] Using Baileys version: ${version.join('.')} (fallback)`);
+        versionOrigin = 'fetchLatestBaileysVersion';
+        console.log(`[${sessionId}] Using Baileys version: ${version.join('.')} (primary)`);
+    } catch (e) {
+        versionOrigin = 'default_baileys';
+        console.log(`[${sessionId}] Failed to fetch version, using Baileys default (fallback)`);
     }
 
     const sock = makeWASocket({
@@ -116,7 +117,7 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
         },
         printQRInTerminal: false,
         logger,
-        browser: Browsers.ubuntu('Chrome'),
+        browser: Browsers.macOS('Desktop'),
         generateHighQualityLinkPreview: false,
         shouldIgnoreJid: (jid) => isJidBroadcast(jid),
         qrTimeout: 40000,
@@ -132,6 +133,13 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
 
     // Store socket reference
     activeSockets.set(sessionId, sock);
+
+    engineLogger.info('session', 'session.socket_created', sessionId, 'Socket criado para a sessão', {
+        waVersion: version ? version.join('.') : 'default',
+        versionOrigin,
+        browserIdentity: sock.authState?.creds?.browser || "Mac OS, Desktop",
+        baileysVersion: require('../../package.json').dependencies['@whiskeysockets/baileys']
+    });
 
     function isSessionOperable() {
         return !stoppedSessions.has(sessionId) && !!Session.findById(sessionId);
