@@ -264,12 +264,15 @@ app.get('/api-documentation', (req, res) => {
 
 app.get('/admin/login.html', (req, res) => {
     if (req.session?.adminAuthed) {
-        return res.redirect('/admin/dashboard.html');
+        return res.redirect('/ops/');
     }
     res.sendFile(path.join(__dirname, 'admin', 'login.html'));
 });
 
 app.get('/admin/dashboard.html', (req, res) => {
+    if (process.env.APIWS_LEGACY_ADMIN_ENABLED === 'false') {
+        return res.redirect('/ops/');
+    }
     if (!req.session?.adminAuthed) {
         return res.redirect('/admin/login.html');
     }

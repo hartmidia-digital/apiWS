@@ -51,18 +51,35 @@ function appendLog(log) {
     const div = document.createElement('div');
     div.className = 'log-entry';
 
-    const time = new Date(log.timestamp).toLocaleTimeString();
+    let logDate = new Date();
+    if (log.timestamp) logDate = new Date(log.timestamp);
+    else if (log.created_at) logDate = new Date(log.created_at);
+    const time = logDate.toLocaleTimeString();
+
     const levelClass = `log-level-${log.level.toLowerCase()}`;
     const sessionText = log.sessionId ? `<span class="log-session">[${log.sessionId}]</span>` : '';
+
+    let opMessage = log.message;
+    if (log.event === 'webhook.dispatch_success') {
+        opMessage = `Webhook enviado com sucesso para evento de ${log.details?.eventType || 'desconhecido'}`;
+    } else if (log.event === 'message.received') opMessage = 'Mensagem recebida pela sessão';
+    else if (log.event === 'session.connected') opMessage = 'Sessão conectada com sucesso';
+    else if (log.event === 'session.disconnected') opMessage = 'Sessão desconectada';
+    else if (log.event === 'session.reconnecting') opMessage = 'Tentando reconectar sessão';
+    else if (log.event === 'session.socket_created') opMessage = 'Socket criado para a sessão';
 
     let html = `<span class="log-time">${time}</span> `;
     html += `<span class="${levelClass}">${log.level}</span> `;
     html += `<span class="log-category">${log.category}::${log.event}</span> `;
     html += sessionText + ` `;
-    html += `<span style="cursor:pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block'">${log.message}</span>`;
+    html += `<span style="cursor:pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block'">${opMessage}</span>`;
 
     if (log.details) {
-        html += `<div class="log-details">${JSON.stringify(log.details, null, 2)}</div>`;
+        html += `<div class="log-details" style="display:none; background:#f9f9f9; padding:5px; margin-top:5px; border-left:3px solid #ccc; color: #333;">
+            <strong>Técnico:</strong> ${log.message}<br>
+            <strong>Origem:</strong> ${log.event}<br>
+            <pre style="margin-top:5px;">${JSON.stringify(log.details, null, 2)}</pre>
+        </div>`;
     }
 
     div.innerHTML = html;

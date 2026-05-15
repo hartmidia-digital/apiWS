@@ -62,3 +62,11 @@ Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 - Registradas pendências entre documentação e implementação real.
 - Criada ata de recomendação para próxima sprint, com foco em Estabilização Operacional (`docs/sprints/sprint-estabilizacao-operacional-apiws.md`).
 - `README.md` reduzido e atualizado para atuar puramente como um portal/índice direcionando para `/docs`.
+## [1.1.3] - 2026-05-15
+### Adicionado
+- O painel `/ops` foi consolidado como Console Operacional oficial da engine.
+- O painel administrativo antigo `/admin` foi marcado como legado e seu acesso será controlado através da flag de ambiente `APIWS_LEGACY_ADMIN_ENABLED`.
+- Adicionado novo fluxo de redirecionamento pós-login para o `/ops`.
+- Implementado listagem de identificação humana (telefone/nome) mascarados nas conexões do WhatsApp no painel Ops.
+- Logs técnicos foram reformulados para uma visão operacional e clara (Logs ao Vivo e Histórico de Eventos).
+- Tela de Integração APIH agora exibe informações completas de último erro/sucesso e lista de falhas recentes no webhook.

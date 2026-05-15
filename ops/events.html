@@ -51,9 +51,9 @@
                 <div class="table-container">
                     <table id="eventsTable">
                         <thead>
-                            <tr><th>Data/Hora</th><th>Level</th><th>Sessão</th><th>Categoria::Evento</th><th>Mensagem</th></tr>
+                            <tr><th>Data/Hora</th><th>Level</th><th>Sessão</th><th>Categoria</th><th>Evento Operacional</th><th>Ações</th></tr>
                         </thead>
-                        <tbody><tr><td colspan="5" class="text-center">Use os filtros.</td></tr></tbody>
+                        <tbody><tr><td colspan="6" class="text-center">Use os filtros.</td></tr></tbody>
                     </table>
                 </div>
             </div>
@@ -69,7 +69,7 @@
 
         async function loadEvents() {
             const tbody = document.querySelector('#eventsTable tbody');
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center">Buscando...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">Buscando...</td></tr>';
             const params = new URLSearchParams();
             const sid = document.getElementById('fSessionId').value.trim();
             const lvl = document.getElementById('fLevel').value;
@@ -84,27 +84,42 @@
                 const data = await res.json();
                 if (data.status === 'success') {
                     tbody.innerHTML = '';
-                    if (data.data.length === 0) return tbody.innerHTML = '<tr><td colspan="5" class="text-center">Nenhum evento.</td></tr>';
+                    if (data.data.length === 0) return tbody.innerHTML = '<tr><td colspan="6" class="text-center">Nenhum evento.</td></tr>';
+
+                    window.logsData = data.data;
+
                     data.data.forEach(log => {
                         const tr = document.createElement('tr');
                         const time = new Date(log.timestamp || log.created_at).toLocaleString();
+
+                        let opMessage = log.message;
+                        if (log.event === 'webhook.dispatch_success') opMessage = `Webhook enviado com sucesso para evento de ${log.details?.eventType || 'desconhecido'}`;
+                        else if (log.event === 'message.received') opMessage = 'Mensagem recebida pela sessão';
+                        else if (log.event === 'session.connected') opMessage = 'Sessão conectada com sucesso';
+                        else if (log.event === 'session.disconnected') opMessage = 'Sessão desconectada';
+                        else if (log.event === 'session.reconnecting') opMessage = 'Tentando reconectar sessão';
+                        else if (log.event === 'session.socket_created') opMessage = 'Socket criado para a sessão';
+
                         tr.innerHTML = `
                             <td>${time}</td>
                             <td><span class="badge ${log.level === 'ERROR' || log.level === 'FATAL' ? 'badge-danger' : log.level === 'WARN' ? 'badge-warning' : 'badge-info'}">${log.level}</span></td>
                             <td>${log.sessionId || log.session_id || '-'}</td>
-                            <td>${log.category}::${log.event}</td>
-                            <td><div style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${log.message}</div></td>
+                            <td>${log.category}</td>
+                            <td><div style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${opMessage}</div></td>
+                            <td><button class="btn btn-sm btn-secondary" onclick="showDetails('${log.id}')">Ver detalhes</button></td>
                         `;
-                        tr.style.cursor = 'pointer';
-                        tr.onclick = () => alert(`${log.message}
-
-Detalhes:
-${JSON.stringify(log.details || log.details_json, null, 2)}`);
                         tbody.appendChild(tr);
                     });
                 }
-            } catch(e) { tbody.innerHTML = '<tr><td colspan="5" class="text-center">Erro ao buscar.</td></tr>'; }
+            } catch(e) { tbody.innerHTML = '<tr><td colspan="6" class="text-center">Erro ao buscar.</td></tr>'; }
         }
+
+        window.showDetails = function(id) {
+            const log = window.logsData.find(l => l.id === id);
+            if(log) {
+                alert(`Data: ${new Date(log.timestamp || log.created_at).toLocaleString()}\nSessão: ${log.sessionId || log.session_id || '-'}\nCategoria: ${log.category}\nEvento Técnico: ${log.event}\nMensagem Operacional: ${log.message}\nDetalhes Técnicos:\n${JSON.stringify(log.details || log.details_json, null, 2)}`);
+            }
+        };
     </script>
 </body>
 </html>

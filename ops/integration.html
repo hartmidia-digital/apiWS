@@ -55,6 +55,8 @@
                         <button class="btn btn-primary" onclick="testWebhook()" id="btnTest">Disparar Teste</button>
                         <div id="testResult" style="margin-top: 1rem; font-size: 0.875rem;"></div>
                     </div>
+
+                    <div id="failuresContainer"></div>
                 </div>
             </div>
         </div>
@@ -79,6 +81,22 @@
                     document.getElementById('iPublicUrl').textContent = info.publicUrl || '-';
                     document.getElementById('iSuccessCount').textContent = info.stats.successToday;
                     document.getElementById('iErrorCount').textContent = info.stats.errorsToday;
+
+                    document.getElementById('iLastSuccess').textContent = info.stats.lastSuccess || 'Nenhum sucesso registrado no período.';
+                    document.getElementById('iLastError').textContent = info.stats.lastError || 'Nenhum erro registrado no período.';
+
+                    const failures = info.stats.recentFailures || [];
+                    let failuresHtml = '<h3 class="card-title mt-4 mb-2" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">Falhas Recentes</h3>';
+                    if(failures.length === 0) {
+                        failuresHtml += '<p>Nenhuma falha recente encontrada.</p>';
+                    } else {
+                        failuresHtml += '<table class="w-full text-left" style="width: 100%; border-collapse: collapse; margin-top: 1rem;"><thead><tr style="border-bottom: 1px solid var(--border-color);"><th>Data/Hora</th><th>Sessão</th><th>Evento</th><th>Erro</th></tr></thead><tbody>';
+                        failures.forEach(f => {
+                            failuresHtml += `<tr style="border-bottom: 1px solid #eee;"><td>${new Date(f.createdAt).toLocaleString()}</td><td>${f.sessionId || '-'}</td><td>${f.eventType}</td><td>${f.error}</td></tr>`;
+                        });
+                        failuresHtml += '</tbody></table>';
+                    }
+                    document.getElementById('failuresContainer').innerHTML = failuresHtml;
                 }
             } catch(e) {}
         }

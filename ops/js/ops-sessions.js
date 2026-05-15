@@ -49,10 +49,15 @@ function renderSessionsTable() {
         const tr = document.createElement('tr');
         tr.setAttribute("data-testid", "ops-session-card");
 
-        let phoneInfo = '-';
-        if (session.detail && session.detail.includes('@s.whatsapp.net')) {
-            const num = session.detail.split('@')[0].split(':')[0];
-            phoneInfo = num.substring(0, 4) + '****' + num.substring(num.length - 2);
+        let phoneInfo = '<span class="text-muted" style="font-size: 0.85em;">Aguardando...</span>';
+        if (session.identity && session.identity.available) {
+            let parts = [];
+            if (session.identity.displayPhone) parts.push(`<strong>${session.identity.displayPhone}</strong>`);
+            if (session.identity.pushName) parts.push(`<span class="text-muted">(${session.identity.pushName})</span>`);
+
+            if (parts.length > 0) {
+                phoneInfo = parts.join(' ');
+            }
         }
 
         const dateStr = session.createdAt ? new Date(session.createdAt).toLocaleString() : '-';
