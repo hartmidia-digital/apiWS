@@ -64,7 +64,7 @@
                 if (data.email) {
                     sessionStorage.setItem('userEmail', data.email);
                 }
-                window.location.href = '/admin/dashboard.html';
+                window.location.href = '/ops/';
             } else {
                 const data = await res.json();
                 const errDiv = document.getElementById('loginError');

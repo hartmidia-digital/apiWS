@@ -2,6 +2,7 @@
 
 ## Objetivo
 O Console Operacional (`/ops`) foi criado com o propósito de oferecer uma visão estritamente técnica sobre o motor do ApiWS. Ele substitui a necessidade de utilizar o painel antigo (`/admin`) para fins técnicos.
+Nota: A partir da versão atual, o `/ops` é considerado o Console Operacional oficial da engine, e o `/admin` é um módulo legado (protegido pela flag `APIWS_LEGACY_ADMIN_ENABLED`).
 
 ## Diferença entre `/admin` (Antigo) e `/ops` (Novo)
 - **`/admin`:** Continha lógicas mistas entre gestão de conexões e envio de campanhas, contatos e listas. Era focado em operação comercial/disparos em massa.
