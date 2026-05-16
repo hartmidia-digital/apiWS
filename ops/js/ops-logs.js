@@ -168,10 +168,11 @@ function renderLogEntry(log, term) {
     html += `<span style="cursor:pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'block' ? 'none' : 'block'">${opMessage}</span>`;
 
     if (log.details) {
+        const sanitizedDetails = sanitizeDetails(log.details);
         html += `<div class="log-details" style="display:none; background:#f9f9f9; padding:5px; margin-top:5px; border-left:3px solid #ccc; color: #333;">
             <strong>Técnico:</strong> ${log.message}<br>
             <strong>Origem:</strong> ${log.event}<br>
-            <pre style="margin-top:5px;">${JSON.stringify(log.details, null, 2)}</pre>
+            <pre style="margin-top:5px;">${JSON.stringify(sanitizedDetails, null, 2)}</pre>
         </div>`;
     }
 

@@ -76,6 +76,7 @@
     </div>
 
     <script src="/ops/js/ops-auth.js"></script>
+    <script src="/ops/js/ops-utils.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             const user = await checkOpsAuth();
@@ -131,8 +132,9 @@
                 html += `<div style="margin-bottom: 0.5rem;"><strong>Erro:</strong> ${f.error}</div>`;
                 html += `<div style="margin-bottom: 1rem;"><strong>Destino:</strong> ${document.getElementById('iWebhookUrl').textContent}</div>`;
                 if(f.details) {
+                    const sanitizedDetails = sanitizeDetails(f.details);
                     html += `<div><strong>Payload/Detalhes:</strong></div>`;
-                    html += `<pre style="background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; margin-top: 0.5rem;">${JSON.stringify(f.details, null, 2)}</pre>`;
+                    html += `<pre style="background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; margin-top: 0.5rem;">${JSON.stringify(sanitizedDetails, null, 2)}</pre>`;
                 }
 
                 document.getElementById('failureDetailsContent').innerHTML = html;

@@ -74,6 +74,7 @@
     </div>
 
     <script src="/ops/js/ops-auth.js"></script>
+    <script src="/ops/js/ops-utils.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             const user = await checkOpsAuth();
@@ -131,7 +132,9 @@
             const log = window.logsData.find(l => l.id === id);
             if(log) {
                 const dateStr = new Date(log.timestamp || log.created_at).toLocaleString();
-                const detailsStr = JSON.stringify(log.details || log.details_json, null, 2);
+
+                const sanitizedDetails = sanitizeDetails(log.details || log.details_json);
+                const detailsStr = JSON.stringify(sanitizedDetails, null, 2);
 
                 let html = `<div style="margin-bottom: 0.5rem;"><strong>Data/Hora:</strong> ${dateStr}</div>`;
                 html += `<div style="margin-bottom: 0.5rem;"><strong>Sessão:</strong> ${log.sessionId || log.session_id || '-'}</div>`;
