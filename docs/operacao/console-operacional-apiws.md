@@ -39,6 +39,13 @@ O motor ApiWS opera com um processador em background nativo que assegura que tod
 - Se o evento falhar por um problema transitório (ex: timeout, HTTP 500, HTTP 429), ele é classificado para **Retry Automático** (Backoff progressivo) incrementando o delay gradualmente entre os disparos.
 - Caso enfrente erros não temporários (ex: HTTP 400 JSON inválido, 404 Endpoint Não Encontrado), será marcado como **Blocked** (Permanente), exigindo revisão.
 - Todos os payload JSON detalhados expostos na aba de Integração são cuidadosamente higienizados, o conteúdo bruto não deve ser lido via front-end do painel por motivos de privacidade e conformidade de segurança.
+- **Segurança de Entregas e Trava do Node**: Há uma proteção de _Stale Lock_. Se o serviço interromper a operação fatalmente durante a transmissão HTTP, a entrega pode ficar travada como "delivering". O worker recuperará o item automaticamente após expirar o tempo limite `WEBHOOK_DELIVERY_STALE_AFTER_SECONDS` configurado.
+- Reprocessamentos manuais atualizarão eventuais URLs cadastradas previamente na entrega para a mais nova URL vigente do ambiente global, garantindo fluidez caso a rota da APIH tenha sido movida.
+
+> **Pendência para os próximos Packs**: Atualmente, a política de purgação exige intervenção para remoção de entregas finalizadas. Sugere-se o provisionamento de um script automatizado estipulado por uma `WEBHOOK_DELIVERY_RETENTION_DAYS`.
+
+### Concorrência e Multi-node
+Este mecanismo baseia-se num banco SQLite isolado. Por se tratar de um banco nativamente dependente de file system com workers operando memória local para travar repetições ("Race conditions"), a utilização do **PM2 Cluster Mode** de múltiplas instâncias para um único projeto não é homologada. Mantenha as diretrizes de Single Process.
 
 ## Diagnóstico de Versão e Validação (WhatsApp Web vs Baileys)
 Para investigar problemas de incompatibilidade de versão (ex: WhatsApp alertando que mensagens foram enviadas por "versão antiga"):

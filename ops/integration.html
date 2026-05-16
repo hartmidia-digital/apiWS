@@ -290,8 +290,11 @@
 
                     // Ações permitidas
                     let actionsHtml = '';
-                    if (['failed', 'retrying', 'blocked'].includes(d.status)) {
-                        actionsHtml += `<button class="btn btn-primary" onclick="doRetry('${d.id}')">Reprocessar Agora</button>`;
+                    if (['failed', 'retrying', 'blocked', 'delivering'].includes(d.status)) {
+                        let retryBtnText = 'Reprocessar Agora';
+                        if (d.status === 'delivering') retryBtnText = 'Forçar Reprocessamento (Travado)';
+
+                        actionsHtml += `<button class="btn btn-primary" onclick="doRetry('${d.id}')">${retryBtnText}</button>`;
                         actionsHtml += `<button class="btn btn-secondary" onclick="doIgnore('${d.id}')">Marcar como Ignorado</button>`;
                     }
                     actionsHtml += `<button class="btn btn-secondary" onclick="navigator.clipboard.writeText('${d.event_id}'); alert('Copiado!');">Copiar Event ID</button>`;

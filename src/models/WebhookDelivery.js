@@ -85,6 +85,27 @@ class WebhookDelivery {
     }
 
     /**
+     * Get stale deliveries that are stuck in 'delivering' status
+     */
+    static getStaleDeliveries(staleSeconds) {
+        // SQLite julianday() returns days. We convert staleSeconds to days by dividing by 86400
+        const stmt = db.prepare(`
+            SELECT * FROM webhook_deliveries
+            WHERE status = 'delivering'
+            AND (julianday('now') - julianday(updated_at)) * 86400 > ?
+        `);
+
+        const rows = stmt.all(staleSeconds);
+        return rows.map(row => {
+            try { row.payload_json = JSON.parse(row.payload_json); } catch(e) {}
+            if (row.headers_json) {
+                try { row.headers_json = JSON.parse(row.headers_json); } catch(e) {}
+            }
+            return row;
+        });
+    }
+
+    /**
      * Get pending deliveries that are due for retry
      */
     static getDueDeliveries() {
@@ -92,7 +113,7 @@ class WebhookDelivery {
             SELECT * FROM webhook_deliveries
             WHERE status IN ('pending', 'retrying')
             AND attempts < max_attempts
-            AND (next_retry_at IS NULL OR next_retry_at <= CURRENT_TIMESTAMP)
+            AND (next_retry_at IS NULL OR datetime(next_retry_at) <= CURRENT_TIMESTAMP)
             ORDER BY created_at ASC
             LIMIT 50
         `);
@@ -160,12 +181,12 @@ class WebhookDelivery {
     static getStats() {
         const todayStart = new Date();
         todayStart.setHours(0,0,0,0);
-        const todayStr = todayStart.toISOString();
+        const todayStr = todayStart.toISOString().replace('T', ' ').substring(0, 19);
 
-        const successStmt = db.prepare(`SELECT count(*) as count FROM webhook_deliveries WHERE status = 'delivered' AND created_at >= ?`);
+        const successStmt = db.prepare(`SELECT count(*) as count FROM webhook_deliveries WHERE status = 'delivered' AND datetime(created_at) >= datetime(?)`);
         const successToday = successStmt.get(todayStr).count;
 
-        const allErrorsStmt = db.prepare(`SELECT count(*) as count FROM webhook_deliveries WHERE status IN ('failed', 'blocked') AND created_at >= ?`);
+        const allErrorsStmt = db.prepare(`SELECT count(*) as count FROM webhook_deliveries WHERE status IN ('failed', 'blocked') AND datetime(created_at) >= datetime(?)`);
         const errorsToday = allErrorsStmt.get(todayStr).count;
 
         const totalPendingStmt = db.prepare(`SELECT count(*) as count FROM webhook_deliveries WHERE status = 'pending'`);

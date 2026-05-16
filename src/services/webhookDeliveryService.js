@@ -88,6 +88,24 @@ class WebhookDeliveryService {
         if (!this.isRetryEnabled) return;
 
         try {
+            // 1. Recover any stale deliveries stuck in 'delivering' due to crashes
+            const staleSeconds = parseInt(process.env.WEBHOOK_DELIVERY_STALE_AFTER_SECONDS || '300', 10);
+            const staleDeliveries = WebhookDelivery.getStaleDeliveries(staleSeconds);
+            for (const stale of staleDeliveries) {
+                if (this.processingIds.has(stale.id)) continue; // Double check it's not actually running here
+
+                // Return to pending/retrying
+                WebhookDelivery.update(stale.id, {
+                    status: stale.attempts > 0 ? 'retrying' : 'pending'
+                });
+
+                engineLogger.info('webhook', 'webhook.delivery_stale_recovered', stale.engine_session_id, `Entrega travada foi recuperada para a fila`, {
+                    eventId: stale.event_id,
+                    deliveryId: stale.id
+                });
+            }
+
+            // 2. Process normally due deliveries
             const dueDeliveries = WebhookDelivery.getDueDeliveries();
             for (const delivery of dueDeliveries) {
                 if (this.processingIds.has(delivery.id)) continue;
@@ -238,13 +256,26 @@ class WebhookDeliveryService {
         const delivery = WebhookDelivery.findById(deliveryId);
         if (!delivery) throw new Error("Delivery not found");
 
-        if (['failed', 'retrying', 'blocked'].includes(delivery.status)) {
+        if (['failed', 'retrying', 'blocked', 'delivering'].includes(delivery.status)) {
             engineLogger.info('webhook', 'webhook.manual_retry', delivery.engine_session_id, `Reprocessamento manual solicitado`, { eventId: delivery.event_id });
 
-            WebhookDelivery.update(deliveryId, {
+            const updates = {
                 status: 'pending',
                 next_retry_at: new Date().toISOString() // immediate
-            });
+            };
+
+            // Check if env webhook URL is different from the saved one to allow recovery from misconfigured URLs
+            const currentEnvWebhookUrl = process.env.WEBHOOK_URL;
+            if (currentEnvWebhookUrl && delivery.webhook_url !== currentEnvWebhookUrl) {
+                updates.webhook_url = currentEnvWebhookUrl;
+                engineLogger.info('webhook', 'webhook.delivery_url_refreshed_for_retry', delivery.engine_session_id, `URL do webhook atualizada para a do .env atual durante o reprocessamento manual`, {
+                    eventId: delivery.event_id,
+                    oldUrl: delivery.webhook_url,
+                    newUrl: currentEnvWebhookUrl
+                });
+            }
+
+            WebhookDelivery.update(deliveryId, updates);
 
             setImmediate(() => this.attemptDelivery(deliveryId));
             return true;
