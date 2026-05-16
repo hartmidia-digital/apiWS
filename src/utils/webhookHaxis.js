@@ -88,6 +88,15 @@ function normalizePreview(eventType, rawPayload = {}) {
         return statusPreview(eventType, rawPayload);
     }
 
+    if (eventType === 'message.reaction') {
+        return {
+            to: rawPayload.key?.remoteJid || rawPayload.remoteJid || '',
+            participant: rawPayload.key?.participant || rawPayload.participant || '',
+            messageId: rawPayload.key?.id || rawPayload.id || '',
+            reactionText: rawPayload.reaction?.text || ''
+        };
+    }
+
     if (eventType === 'group.update' || eventType === 'group.participants.update') {
         return {
             groupId: rawPayload.id || rawPayload.jid || rawPayload.groupId || '',
@@ -102,6 +111,27 @@ function normalizePreview(eventType, rawPayload = {}) {
             jid: rawPayload.id || rawPayload.jid || '',
             name: rawPayload.name || rawPayload.notify || rawPayload.verifiedName || '',
             hasAvatar: Boolean(rawPayload.avatarUrl || rawPayload.imgUrl || rawPayload.profilePictureUrl)
+        };
+    }
+
+    if (eventType === 'call.received') {
+        return {
+            callId: rawPayload.id || '',
+            from: rawPayload.from || '',
+            status: rawPayload.status || ''
+        };
+    }
+
+    if (eventType === 'blocklist.update') {
+        return {
+            action: rawPayload.action || '',
+            blocklistLength: rawPayload.blocklist?.length || 0
+        };
+    }
+
+    if (eventType === 'chat.update') {
+        return {
+            jid: rawPayload.id || rawPayload.jid || (typeof rawPayload === 'string' ? rawPayload : '')
         };
     }
 

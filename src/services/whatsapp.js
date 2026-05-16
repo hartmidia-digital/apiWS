@@ -286,7 +286,12 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
                 continue;
             }
 
-            emitEvent(messageUpdateEventType(update), update);
+            const eventType = messageUpdateEventType(update);
+            engineLogger.debug('message', eventType, sessionId, `Atualização de mensagem (${eventType})`, {
+                messageId: update.key?.id,
+                remoteJid: update.key?.remoteJid
+            });
+            emitEvent(eventType, update);
         }
     });
 
@@ -295,6 +300,10 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
             return;
         }
 
+        engineLogger.debug('message', 'message.deleted', sessionId, 'Mensagem apagada', {
+            messageId: item.keys?.[0]?.id || item.key?.id,
+            remoteJid: item.keys?.[0]?.remoteJid || item.key?.remoteJid
+        });
         emitEvent('message.deleted', item);
     });
 
@@ -304,30 +313,116 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
                 continue;
             }
 
+            engineLogger.debug('message', 'message.status', sessionId, 'Atualização de recibo de mensagem', {
+                messageId: update.key?.id,
+                remoteJid: update.key?.remoteJid,
+                status: update.receipt?.type || update.update?.status
+            });
             emitEvent('message.status', update);
+        }
+    });
+
+    sock.ev.on('messages.reaction', (reactions) => {
+        for (const reaction of reactions || []) {
+            if (isStatusBroadcastMessage(reaction)) {
+                continue;
+            }
+
+            engineLogger.debug('message', 'message.reaction', sessionId, 'Reação em mensagem', {
+                messageId: reaction.key?.id,
+                remoteJid: reaction.key?.remoteJid,
+                reactionText: reaction.reaction?.text
+            });
+            emitEvent('message.reaction', reaction);
         }
     });
 
     sock.ev.on('contacts.update', (updates) => {
         for (const update of updates || []) {
+            engineLogger.debug('contact', 'contact.update', sessionId, 'Contato atualizado', {
+                jid: update.id || update.jid
+            });
             emitEvent('contact.update', update);
         }
     });
 
     sock.ev.on('contacts.upsert', (updates) => {
         for (const update of updates || []) {
+            engineLogger.debug('contact', 'contact.update', sessionId, 'Contato inserido', {
+                jid: update.id || update.jid
+            });
             emitEvent('contact.update', update);
         }
     });
 
     sock.ev.on('groups.update', (updates) => {
         for (const update of updates || []) {
+            engineLogger.debug('group', 'group.update', sessionId, 'Grupo atualizado', {
+                groupId: update.id || update.jid
+            });
             emitEvent('group.update', update);
         }
     });
 
     sock.ev.on('group-participants.update', (update) => {
+        engineLogger.debug('group', 'group.participants.update', sessionId, 'Participantes do grupo atualizados', {
+            groupId: update.id || update.jid,
+            action: update.action
+        });
         emitEvent('group.participants.update', update);
+    });
+
+    sock.ev.on('call', (calls) => {
+        for (const call of calls || []) {
+            engineLogger.info('call', 'call.received', sessionId, 'Chamada recebida', {
+                callId: call.id,
+                from: call.from,
+                status: call.status
+            });
+            emitEvent('call.received', call);
+        }
+    });
+
+    sock.ev.on('blocklist.update', (update) => {
+        engineLogger.info('blocklist', 'blocklist.update', sessionId, 'Lista de bloqueio atualizada', {
+            blocklistLength: update?.blocklist?.length,
+            action: update?.action
+        });
+        emitEvent('blocklist.update', update);
+    });
+
+    sock.ev.on('blocklist.set', (set) => {
+        engineLogger.info('blocklist', 'blocklist.update', sessionId, 'Lista de bloqueio definida', {
+            blocklistLength: set?.blocklist?.length
+        });
+        emitEvent('blocklist.update', set);
+    });
+
+    sock.ev.on('chats.upsert', (chats) => {
+        for (const chat of chats || []) {
+            engineLogger.debug('chat', 'chat.update', sessionId, 'Chat inserido', {
+                jid: chat.id || chat.jid
+            });
+            emitEvent('chat.update', chat);
+        }
+    });
+
+    sock.ev.on('chats.update', (updates) => {
+        for (const update of updates || []) {
+            engineLogger.debug('chat', 'chat.update', sessionId, 'Chat atualizado', {
+                jid: update.id || update.jid
+            });
+            emitEvent('chat.update', update);
+        }
+    });
+
+    sock.ev.on('chats.delete', (deletes) => {
+        for (const del of deletes || []) {
+            engineLogger.debug('chat', 'chat.update', sessionId, 'Chat apagado', {
+                jid: del.id || del.jid || del
+            });
+            emitEvent('chat.update', del);
+        }
     });
 
     return sock;
