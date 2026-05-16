@@ -31,7 +31,14 @@ O painel está acessível pela rota `/ops`. O acesso exige:
 3. **Logs ao Vivo (`/ops/live-logs.html`):** Terminal com websocket transmitindo os logs sanitizados do motor em tempo real.
 4. **Histórico de Eventos (`/ops/events.html`):** Tabela consultável em SQLite dos últimos eventos.
 5. **Saúde (`/ops/health.html`):** Status de Permissões e integridade de variáveis `.env` críticas (Nunca exibe `MASTER_API_KEY` ou `SESSION_SECRET`).
-6. **Integração (`/ops/integration.html`):** Permite disparar um webhook neutro (`webhook.test`) contra o APIH para avaliar o tempo de resposta e integridade da conexão.
+6. **Integração (`/ops/integration.html`):** Oferece visualização completa da Fila de Webhooks (tabela `webhook_deliveries`). Permite disparar um webhook neutro (`webhook.test`) contra o APIH, verificar entregas pendentes, analisar eventos falhos (em retry automático ou com falha permanente) e aplicar ações manuais de reprocessamento ou descarte seguro, sempre mantendo o UUID `event_id` garantindo idempotência com a APIH.
+
+## Fila e Retry de Webhooks
+O motor ApiWS opera com um processador em background nativo que assegura que todo evento recebido (ex: `message.received`) seja colocado em uma fila transacional (tabela `webhook_deliveries`) **antes** de tentar despachar o HTTP POST para a APIH.
+- Diferença entre Logs e Fila: Enquanto o Log (tabela `engine_logs`) reflete o histórico cronológico de um fato ocorrido na arquitetura interna, a Fila controla exclusivamente o status pendente da transmissão para o sistema externo, suportando repetições.
+- Se o evento falhar por um problema transitório (ex: timeout, HTTP 500, HTTP 429), ele é classificado para **Retry Automático** (Backoff progressivo) incrementando o delay gradualmente entre os disparos.
+- Caso enfrente erros não temporários (ex: HTTP 400 JSON inválido, 404 Endpoint Não Encontrado), será marcado como **Blocked** (Permanente), exigindo revisão.
+- Todos os payload JSON detalhados expostos na aba de Integração são cuidadosamente higienizados, o conteúdo bruto não deve ser lido via front-end do painel por motivos de privacidade e conformidade de segurança.
 
 ## Diagnóstico de Versão e Validação (WhatsApp Web vs Baileys)
 Para investigar problemas de incompatibilidade de versão (ex: WhatsApp alertando que mensagens foram enviadas por "versão antiga"):

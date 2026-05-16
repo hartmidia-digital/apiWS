@@ -161,6 +161,40 @@ function initializeSchema() {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_enginelogs_session_id ON engine_logs(session_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_enginelogs_correlation_id ON engine_logs(correlation_id)`);
 
+    // Webhook Deliveries table
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS webhook_deliveries (
+            id TEXT PRIMARY KEY,
+            event_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            engine_id TEXT,
+            engine_base_url TEXT,
+            engine_session_id TEXT,
+            webhook_url TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            headers_json TEXT,
+            status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'delivering', 'delivered', 'retrying', 'failed', 'blocked', 'ignored')),
+            attempts INTEGER DEFAULT 0,
+            max_attempts INTEGER DEFAULT 5,
+            last_error TEXT,
+            last_http_status INTEGER,
+            next_retry_at DATETIME,
+            delivered_at DATETIME,
+            failed_at DATETIME,
+            ignored_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    // Indexes for webhook_deliveries
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_webhook_deliv_event_id ON webhook_deliveries(event_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_webhook_deliv_engine_id ON webhook_deliveries(engine_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_webhook_deliv_session_id ON webhook_deliveries(engine_session_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_webhook_deliv_status ON webhook_deliveries(status)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_webhook_deliv_next_retry ON webhook_deliveries(next_retry_at)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_webhook_deliv_created ON webhook_deliveries(created_at)`);
+
     console.log('[Database] Schema initialized successfully');
 }
 

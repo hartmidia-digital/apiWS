@@ -554,6 +554,10 @@ User.ensureAdmin(process.env.ADMIN_DASHBOARD_PASSWORD);
     }
 })();
 
+// Initialize Webhook Delivery Worker
+const webhookDeliveryService = require('./src/services/webhookDeliveryService');
+webhookDeliveryService.startWorker();
+
 // Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
@@ -564,6 +568,7 @@ server.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGINT', () => {
     console.log('\n[SYSTEM] Shutting down...');
+    webhookDeliveryService.stopWorker();
 
     // Disconnect all WhatsApp sessions
     for (const [sessionId] of whatsappService.getActiveSessions()) {

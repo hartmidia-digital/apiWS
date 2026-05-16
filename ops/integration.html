@@ -5,6 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Integração APIH - Ops ApiWS</title>
     <link rel="stylesheet" href="/ops/css/ops.css">
+    <style>
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem; }
+        .stat-card { background: #fff; padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color); text-align: center; }
+        .stat-card h4 { margin: 0 0 0.5rem 0; font-size: 0.875rem; color: #666; }
+        .stat-card .value { font-size: 1.5rem; font-weight: bold; color: var(--primary-color); }
+        .filters { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .filter-btn { padding: 0.25rem 0.75rem; border: 1px solid var(--border-color); background: #f9f9f9; border-radius: 4px; cursor: pointer; }
+        .filter-btn.active { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+        .table-responsive { overflow-x: auto; }
+        .table-deliveries th, .table-deliveries td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border-color); }
+        .badge { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+        .badge-pending { background: #e2e8f0; color: #475569; }
+        .badge-delivering { background: #fef08a; color: #854d0e; }
+        .badge-delivered { background: #bbf7d0; color: #166534; }
+        .badge-retrying { background: #fed7aa; color: #9a3412; }
+        .badge-failed { background: #fecaca; color: #991b1b; }
+        .badge-blocked { background: #cbd5e1; color: #334155; }
+        .badge-ignored { background: #e5e7eb; color: #6b7280; }
+        .section-title { border-bottom: 2px solid var(--primary-color); padding-bottom: 0.5rem; margin-bottom: 1rem; margin-top: 2rem; }
+    </style>
 </head>
 <body>
     <aside class="sidebar">
@@ -27,50 +47,99 @@
         </header>
 
         <div class="content-wrapper">
-            <div class="grid grid-cols-2">
-                <div class="card">
-                    <h2 class="card-title">Configuração Atual</h2>
-                    <table>
-                        <tbody>
-                            <tr><td>Webhook URL</td><td id="iWebhookUrl">-</td></tr>
-                            <tr><td>Secret Configurado?</td><td id="iSecret">-</td></tr>
-                            <tr><td>APIWS_ENGINE_ID</td><td id="iEngineId">-</td></tr>
-                            <tr><td>APIWS_PUBLIC_URL</td><td id="iPublicUrl">-</td></tr>
-                        </tbody>
-                    </table>
-                </div>
 
-                <div class="card">
-                    <h2 class="card-title">Estatísticas de Disparo (Hoje)</h2>
-                    <table>
-                        <tbody>
-                            <tr><td>Enviados com Sucesso</td><td id="iSuccessCount">-</td></tr>
-                            <tr><td>Falhas</td><td id="iErrorCount">-</td></tr>
-                            <tr><td>Último Sucesso</td><td id="iLastSuccess">-</td></tr>
-                            <tr><td>Último Erro</td><td id="iLastError">-</td></tr>
-                        </tbody>
-                    </table>
-
-                    <div class="mt-4" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
-                        <button class="btn btn-primary" onclick="testWebhook()" id="btnTest">Disparar Teste</button>
-                        <div id="testResult" style="margin-top: 1rem; font-size: 0.875rem;"></div>
-                    </div>
-
-                    <div id="failuresContainer"></div>
+            <h2 class="section-title">Configuração Atual</h2>
+            <div class="card" style="margin-bottom: 2rem;">
+                <table>
+                    <tbody>
+                        <tr><td>Webhook URL</td><td id="iWebhookUrl">-</td></tr>
+                        <tr><td>Secret Configurado?</td><td id="iSecret">-</td></tr>
+                        <tr><td>APIWS_ENGINE_ID</td><td id="iEngineId">-</td></tr>
+                        <tr><td>APIWS_PUBLIC_URL</td><td id="iPublicUrl">-</td></tr>
+                        <tr><td>Retry Automático</td><td id="iRetryEnabled">-</td></tr>
+                        <tr><td>Máx. Tentativas</td><td id="iMaxAttempts">-</td></tr>
+                    </tbody>
+                </table>
+                <div class="mt-4" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                    <button class="btn btn-primary" onclick="testWebhook()" id="btnTest">Disparar Teste</button>
+                    <div id="testResult" style="margin-top: 1rem; font-size: 0.875rem;"></div>
                 </div>
             </div>
+
+            <h2 class="section-title">Estatísticas de Disparo</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h4>Sucessos (Hoje)</h4>
+                    <div class="value" id="sSuccessToday">-</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Pendentes / Entregando</h4>
+                    <div class="value" id="sPendingCount" style="color: #475569">-</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Em Retry</h4>
+                    <div class="value" id="sRetryingCount" style="color: #c2410c">-</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Falhas Definitivas</h4>
+                    <div class="value" id="sFailedCount" style="color: #b91c1c">-</div>
+                </div>
+            </div>
+            <div class="card" style="margin-bottom: 2rem;">
+                <table>
+                    <tbody>
+                        <tr><td>Último Sucesso</td><td id="iLastSuccess">-</td></tr>
+                        <tr><td>Último Erro</td><td id="iLastError">-</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h2 class="section-title">Fila de Entrega de Webhooks</h2>
+            <div class="filters" id="deliveryFilters">
+                <button class="filter-btn active" data-filter="">Todos</button>
+                <button class="filter-btn" data-filter="attention">Requer Atenção (Falhas)</button>
+                <button class="filter-btn" data-filter="pending">Pendentes</button>
+                <button class="filter-btn" data-filter="retrying">Tentando novamente</button>
+                <button class="filter-btn" data-filter="delivered">Entregues</button>
+                <button class="filter-btn" data-filter="ignored">Ignorados</button>
+                <button class="btn btn-sm btn-secondary" onclick="loadDeliveries()" style="margin-left: auto;">↻ Atualizar</button>
+            </div>
+
+            <div class="card table-responsive">
+                <table class="table-deliveries" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Sessão</th>
+                            <th>Evento</th>
+                            <th>Status</th>
+                            <th>Tentativas</th>
+                            <th>Próx. Tentativa</th>
+                            <th>Erro</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="deliveriesContainer">
+                        <tr><td colspan="8" style="text-align: center; padding: 1rem;">Carregando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
         </div>
     </main>
 
-    <!-- Modal Detalhes da Falha -->
-    <div id="failureDetailsModal" class="modal-overlay">
+    <!-- Modal Detalhes -->
+    <div id="detailsModal" class="modal-overlay">
         <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
-                <h3 class="modal-title">Detalhes da Falha de Integração</h3>
-                <button class="close-modal" onclick="closeFailureDetailsModal()">&times;</button>
+                <h3 class="modal-title">Detalhes da Entrega</h3>
+                <button class="close-modal" onclick="closeDetailsModal()">&times;</button>
             </div>
-            <div id="failureDetailsContent" style="font-size: 0.875rem; color: #333;">
+            <div id="detailsContent" style="font-size: 0.875rem; color: #333;">
                 Carregando...
+            </div>
+            <div class="modal-footer" style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem; display: flex; gap: 0.5rem;" id="modalActions">
+                <!-- Ações dinâmicas -->
             </div>
         </div>
     </div>
@@ -78,9 +147,24 @@
     <script src="/ops/js/ops-auth.js"></script>
     <script src="/ops/js/ops-utils.js"></script>
     <script>
+        let currentFilter = '';
+
         document.addEventListener('DOMContentLoaded', async () => {
             const user = await checkOpsAuth();
-            if (user) loadIntegration();
+            if (user) {
+                await loadIntegration();
+                await loadDeliveries();
+
+                // Set up filters
+                document.querySelectorAll('.filter-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                        currentFilter = e.target.getAttribute('data-filter');
+                        loadDeliveries();
+                    });
+                });
+            }
         });
 
         async function loadIntegration() {
@@ -90,60 +174,176 @@
                 if(data.status === 'success') {
                     const info = data.data;
                     document.getElementById('iWebhookUrl').textContent = info.webhookUrl || '-';
-                    document.getElementById('iSecret').innerHTML = info.hasSecret ? '<span class="badge badge-success">Sim</span>' : '<span class="badge badge-warning">Não</span>';
+                    document.getElementById('iSecret').innerHTML = info.hasSecret ? '<span class="badge badge-success" style="background:#bbf7d0;color:#166534">Sim</span>' : '<span class="badge badge-warning" style="background:#fef08a;color:#854d0e">Não</span>';
                     document.getElementById('iEngineId').textContent = info.engineId || '-';
                     document.getElementById('iPublicUrl').textContent = info.publicUrl || '-';
-                    document.getElementById('iSuccessCount').textContent = info.stats.successToday;
-                    document.getElementById('iErrorCount').textContent = info.stats.errorsToday;
 
-                    document.getElementById('iLastSuccess').textContent = info.stats.lastSuccess || 'Nenhum sucesso registrado no período.';
-                    document.getElementById('iLastError').textContent = info.stats.lastError || 'Nenhum erro registrado no período.';
+                    document.getElementById('iRetryEnabled').innerHTML = info.retryEnabled ? '<span style="color: green">Ativo</span>' : '<span style="color: red">Inativo</span>';
+                    document.getElementById('iMaxAttempts').textContent = info.maxAttempts;
 
-                    window.integrationFailures = info.stats.recentFailures || [];
-                    const failures = window.integrationFailures;
-                    let failuresHtml = '<h3 class="card-title mt-4 mb-2" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">Falhas Recentes</h3>';
-                    if(failures.length === 0) {
-                        failuresHtml += '<p>Nenhuma falha recente encontrada.</p>';
-                    } else {
-                        failuresHtml += '<table class="w-full text-left" style="width: 100%; border-collapse: collapse; margin-top: 1rem;"><thead><tr style="border-bottom: 1px solid var(--border-color);"><th>Data/Hora</th><th>Sessão</th><th>Evento</th><th>Erro</th><th>Ações</th></tr></thead><tbody>';
-                        failures.forEach((f, idx) => {
-                            failuresHtml += `<tr style="border-bottom: 1px solid #eee;">
-                                <td>${new Date(f.createdAt).toLocaleString()}</td>
-                                <td>${f.sessionId || '-'}</td>
-                                <td>${f.eventType}</td>
-                                <td>${f.error}</td>
-                                <td><button class="btn btn-sm btn-secondary" onclick="showFailureDetails(${idx})">Ver detalhes</button></td>
-                            </tr>`;
-                        });
-                        failuresHtml += '</tbody></table>';
-                    }
-                    document.getElementById('failuresContainer').innerHTML = failuresHtml;
+                    document.getElementById('sSuccessToday').textContent = info.stats.successToday;
+                    document.getElementById('sPendingCount').textContent = info.stats.pendingCount;
+                    document.getElementById('sRetryingCount').textContent = info.stats.retryingCount;
+                    document.getElementById('sFailedCount').textContent = info.stats.failedCount + info.stats.blockedCount;
+
+                    document.getElementById('iLastSuccess').textContent = info.stats.lastSuccess || 'Nenhum sucesso registrado.';
+                    document.getElementById('iLastError').textContent = info.stats.lastError || 'Nenhum erro registrado.';
                 }
-            } catch(e) {}
+            } catch(e) {
+                console.error("Failed to load integration info", e);
+            }
         }
 
-        window.showFailureDetails = function(index) {
-            const f = window.integrationFailures[index];
-            if(f) {
-                const dateStr = new Date(f.createdAt).toLocaleString();
-                let html = `<div style="margin-bottom: 0.5rem;"><strong>Data/Hora:</strong> ${dateStr}</div>`;
-                html += `<div style="margin-bottom: 0.5rem;"><strong>Sessão:</strong> ${f.sessionId || '-'}</div>`;
-                html += `<div style="margin-bottom: 0.5rem;"><strong>Evento:</strong> ${f.eventType}</div>`;
-                html += `<div style="margin-bottom: 0.5rem;"><strong>Erro:</strong> ${f.error}</div>`;
-                html += `<div style="margin-bottom: 1rem;"><strong>Destino:</strong> ${document.getElementById('iWebhookUrl').textContent}</div>`;
-                if(f.details) {
-                    const sanitizedDetails = sanitizeDetails(f.details);
-                    html += `<div><strong>Payload/Detalhes:</strong></div>`;
-                    html += `<pre style="background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; margin-top: 0.5rem;">${JSON.stringify(sanitizedDetails, null, 2)}</pre>`;
+        async function loadDeliveries() {
+            const container = document.getElementById('deliveriesContainer');
+            container.innerHTML = '<tr><td colspan="8" style="text-align: center;">Carregando...</td></tr>';
+
+            try {
+                let url = '/api/v1/ops/webhook-deliveries?limit=50';
+                if (currentFilter === 'attention') {
+                    url += '&attention_required=true';
+                } else if (currentFilter) {
+                    url += '&status=' + currentFilter;
                 }
 
-                document.getElementById('failureDetailsContent').innerHTML = html;
-                document.getElementById('failureDetailsModal').classList.add('active');
+                const res = await fetch(url);
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    window.currentDeliveries = data.data;
+                    renderDeliveries(data.data);
+                } else {
+                    container.innerHTML = `<tr><td colspan="8" style="text-align: center; color: red;">Erro: ${data.message}</td></tr>`;
+                }
+            } catch (e) {
+                container.innerHTML = `<tr><td colspan="8" style="text-align: center; color: red;">Falha de conexão</td></tr>`;
+            }
+        }
+
+        function renderDeliveries(deliveries) {
+            const container = document.getElementById('deliveriesContainer');
+            if (!deliveries || deliveries.length === 0) {
+                container.innerHTML = '<tr><td colspan="8" style="text-align: center;">Nenhuma entrega encontrada para o filtro.</td></tr>';
+                return;
+            }
+
+            let html = '';
+            deliveries.forEach((d) => {
+                const dateStr = new Date(d.created_at).toLocaleString();
+                const nextRetryStr = d.next_retry_at ? new Date(d.next_retry_at).toLocaleString() : '-';
+
+                let badgeClass = `badge badge-${d.status}`;
+                let statusLabel = d.status;
+                if (d.status === 'pending') statusLabel = 'Pendente';
+                if (d.status === 'delivering') statusLabel = 'Em Envio';
+                if (d.status === 'delivered') statusLabel = 'Entregue';
+                if (d.status === 'retrying') statusLabel = 'Retry';
+                if (d.status === 'failed') statusLabel = 'Falhou';
+                if (d.status === 'blocked') statusLabel = 'Bloqueado';
+                if (d.status === 'ignored') statusLabel = 'Ignorado';
+
+                html += `<tr>
+                    <td>${dateStr}</td>
+                    <td>${d.engine_session_id || '-'}</td>
+                    <td>${d.event_type}</td>
+                    <td><span class="${badgeClass}">${statusLabel}</span></td>
+                    <td>${d.attempts}/${d.max_attempts}</td>
+                    <td>${nextRetryStr}</td>
+                    <td>${d.last_error || '-'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary" onclick="showDetails('${d.id}')">Ver detalhes</button>
+                    </td>
+                </tr>`;
+            });
+            container.innerHTML = html;
+        }
+
+        async function showDetails(id) {
+            document.getElementById('detailsContent').innerHTML = 'Carregando detalhes...';
+            document.getElementById('modalActions').innerHTML = '';
+            document.getElementById('detailsModal').classList.add('active');
+
+            try {
+                const res = await fetch(`/api/v1/ops/webhook-deliveries/${id}`);
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    const d = data.data;
+                    const dateStr = new Date(d.created_at).toLocaleString();
+
+                    let html = `<div style="margin-bottom: 0.5rem;"><strong>Event ID:</strong> ${d.event_id}</div>`;
+                    html += `<div style="margin-bottom: 0.5rem;"><strong>Data/Hora Criação:</strong> ${dateStr}</div>`;
+                    if (d.delivered_at) html += `<div style="margin-bottom: 0.5rem;"><strong>Data/Hora Entrega:</strong> ${new Date(d.delivered_at).toLocaleString()}</div>`;
+                    html += `<div style="margin-bottom: 0.5rem;"><strong>Sessão:</strong> ${d.engine_session_id || '-'}</div>`;
+                    html += `<div style="margin-bottom: 0.5rem;"><strong>Evento:</strong> ${d.event_type}</div>`;
+                    html += `<div style="margin-bottom: 0.5rem;"><strong>Status:</strong> <span class="badge badge-${d.status}">${d.status}</span></div>`;
+                    html += `<div style="margin-bottom: 0.5rem;"><strong>Tentativas:</strong> ${d.attempts}/${d.max_attempts}</div>`;
+                    html += `<div style="margin-bottom: 0.5rem;"><strong>Último Status HTTP:</strong> ${d.last_http_status || '-'}</div>`;
+                    html += `<div style="margin-bottom: 0.5rem;"><strong>Erro:</strong> ${d.last_error || '-'}</div>`;
+
+                    if (d.payload_json) {
+                        html += `<div><strong>Payload (Sanitizado):</strong></div>`;
+                        html += `<pre style="background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; margin-top: 0.5rem;">${JSON.stringify(d.payload_json, null, 2)}</pre>`;
+                    }
+
+                    document.getElementById('detailsContent').innerHTML = html;
+
+                    // Ações permitidas
+                    let actionsHtml = '';
+                    if (['failed', 'retrying', 'blocked'].includes(d.status)) {
+                        actionsHtml += `<button class="btn btn-primary" onclick="doRetry('${d.id}')">Reprocessar Agora</button>`;
+                        actionsHtml += `<button class="btn btn-secondary" onclick="doIgnore('${d.id}')">Marcar como Ignorado</button>`;
+                    }
+                    actionsHtml += `<button class="btn btn-secondary" onclick="navigator.clipboard.writeText('${d.event_id}'); alert('Copiado!');">Copiar Event ID</button>`;
+
+                    document.getElementById('modalActions').innerHTML = actionsHtml;
+
+                } else {
+                    document.getElementById('detailsContent').innerHTML = `Erro: ${data.message}`;
+                }
+            } catch (e) {
+                document.getElementById('detailsContent').innerHTML = `Erro de conexão`;
+            }
+        }
+
+        window.closeDetailsModal = function() {
+            document.getElementById('detailsModal').classList.remove('active');
+        };
+
+        window.doRetry = async function(id) {
+            if(!confirm('Deseja agendar um reprocessamento imediato para este evento mantendo o mesmo event_id?')) return;
+            try {
+                const res = await fetch(`/api/v1/ops/webhook-deliveries/${id}/retry`, { method: 'POST' });
+                const data = await res.json();
+                if(data.status === 'success') {
+                    alert('Reprocessamento agendado!');
+                    closeDetailsModal();
+                    loadDeliveries();
+                    loadIntegration();
+                } else {
+                    alert('Erro: ' + data.message);
+                }
+            } catch(e) {
+                alert('Erro na requisição');
             }
         };
 
-        window.closeFailureDetailsModal = function() {
-            document.getElementById('failureDetailsModal').classList.remove('active');
+        window.doIgnore = async function(id) {
+            if(!confirm('Deseja marcar este evento como ignorado? Ele não será mais reprocessado.')) return;
+            try {
+                const res = await fetch(`/api/v1/ops/webhook-deliveries/${id}/ignore`, { method: 'POST' });
+                const data = await res.json();
+                if(data.status === 'success') {
+                    alert('Marcado como ignorado.');
+                    closeDetailsModal();
+                    loadDeliveries();
+                    loadIntegration();
+                } else {
+                    alert('Erro: ' + data.message);
+                }
+            } catch(e) {
+                alert('Erro na requisição');
+            }
         };
 
         async function testWebhook() {
@@ -159,6 +359,8 @@
                 document.getElementById('testResult').innerHTML = `<span style="color: red;">Erro</span>`;
             } finally {
                 btn.disabled = false; btn.textContent = 'Disparar Teste';
+                // Reload list to show the newly created test delivery
+                setTimeout(() => { loadDeliveries(); loadIntegration(); }, 1000);
             }
         }
     </script>

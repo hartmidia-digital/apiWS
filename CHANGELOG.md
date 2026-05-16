@@ -3,6 +3,13 @@
 Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 
 ## [Unreleased]
+### Added
+- **Confiabilidade de Entrega de Webhooks (Fila Persistente):**
+  - Adicionada tabela SQLite `webhook_deliveries` para persistir e enfileirar webhooks antes do envio, separando o status de entrega do log de eventos.
+  - Implementado Worker de Background com repetições automáticas (Retry) via backoff progressivo em caso de falhas temporárias de rede (timeouts, HTTP 500, etc) ao comunicar com a APIH.
+  - Preservação estrita do `event_id` durante retentativas para garantir idempotência do lado da APIH.
+  - Painel Operacional `/ops/integration.html` reestruturado para exibir métricas da fila (Pendentes, Em Retry, Falhas), listagem detalhada de todos os envios e suporte à intervenção manual (reprocessar agendamento imediatamente ou marcar erro definitivo como ignorado).
+
 ### Fixes & Compatibility (Compatibilidade WA Web/Baileys)
 - Atualização da versão do pacote `@whiskeysockets/baileys` de `^7.0.0-rc.9` para `^7.0.0-rc11` e ajustes de compatibilidade para resolver o problema onde o WhatsApp marcava mensagens como enviadas por "versão antiga".
 - Remoção do uso forçado de `fetchLatestWaWebVersion()` devido a possíveis desalinhamentos com os protobufs do Baileys. A prioridade agora é o `fetchLatestBaileysVersion()`, com fallback automático.
