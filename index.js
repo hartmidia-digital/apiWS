@@ -110,6 +110,20 @@ app.use(express.urlencoded({ extended: true }));
 
 // Segurança: Não servir todo o diretório raiz. Limitar ao necessário.
 const haxisPaths = require('./src/config/paths');
+
+// Middleware para proteger todas as rotas do Admin Legado
+app.use('/admin', (req, res, next) => {
+    // Ignorar arquivos não HTML e login
+    if (!req.path.endsWith('.html') || req.path === '/login.html') {
+        return next();
+    }
+    // Verificar flag do legado
+    if (process.env.APIWS_LEGACY_ADMIN_ENABLED === 'false') {
+        return res.redirect('/ops/');
+    }
+    next();
+});
+
 app.use('/admin', express.static(path.join(__dirname, 'admin')));
 app.use('/media', express.static(haxisPaths.media));
 
@@ -264,7 +278,7 @@ app.get('/api-documentation', (req, res) => {
 
 app.get('/admin/login.html', (req, res) => {
     if (req.session?.adminAuthed) {
-        return res.redirect('/admin/dashboard.html');
+        return res.redirect('/ops/');
     }
     res.sendFile(path.join(__dirname, 'admin', 'login.html'));
 });

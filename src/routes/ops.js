@@ -96,6 +96,48 @@ router.get('/health', (req, res) => {
 });
 
 /**
+ * Helper para extrair identidade humana (telefone e nome) da sessão de forma segura.
+ */
+function getSessionIdentity(liveSess, dbSess) {
+    const identity = {
+        phoneNumber: null,
+        displayPhone: null,
+        pushName: null,
+        rawJid: null,
+        available: false
+    };
+
+    if (liveSess && liveSess.user) {
+        identity.available = true;
+        identity.rawJid = liveSess.user.id;
+        identity.pushName = liveSess.user.name || null;
+
+        const rawPhone = identity.rawJid.split(':')[0].split('@')[0];
+        identity.phoneNumber = rawPhone;
+
+        if (rawPhone.length > 4) {
+            identity.displayPhone = rawPhone.substring(0, 4) + '****' + rawPhone.substring(rawPhone.length - 4);
+        } else {
+            identity.displayPhone = rawPhone;
+        }
+    } else if (dbSess && dbSess.detail && dbSess.detail.includes('@s.whatsapp.net')) {
+        identity.available = true;
+        identity.rawJid = dbSess.detail;
+
+        const rawPhone = dbSess.detail.split('@')[0].split(':')[0];
+        identity.phoneNumber = rawPhone;
+
+        if (rawPhone.length > 4) {
+            identity.displayPhone = rawPhone.substring(0, 4) + '****' + rawPhone.substring(rawPhone.length - 4);
+        } else {
+            identity.displayPhone = rawPhone;
+        }
+    }
+
+    return identity;
+}
+
+/**
  * GET /api/v1/ops/sessions
  * List all sessions with current actual status
  */
@@ -106,11 +148,14 @@ router.get('/sessions', (req, res) => {
     // Augment with live memory status
     const result = dbSessions.map(dbSess => {
         const liveSess = whatsappService.getActiveSessions().get(dbSess.id);
+        const identity = getSessionIdentity(liveSess, dbSess);
+
         // DB is the source of truth for status since we update it real time
         return {
             id: dbSess.id,
             status: dbSess.status || 'DISCONNECTED',
             detail: dbSess.detail,
+            identity: identity,
             createdAt: dbSess.created_at,
             updatedAt: dbSess.updated_at
         };
@@ -281,6 +326,34 @@ router.delete('/sessions/:id', async (req, res) => {
 });
 
 /**
+ * Sanitiza objetos de detalhes técnicos (payloads), mascarando informações sensíveis no backend.
+ */
+function sanitizePayload(detailsObj) {
+    if (!detailsObj) return detailsObj;
+    let obj = typeof detailsObj === 'string' ? JSON.parse(detailsObj) : JSON.parse(JSON.stringify(detailsObj));
+
+    function maskNode(node) {
+        if (!node || typeof node !== 'object') return;
+        for (const key in node) {
+            if (['text', 'message', 'conversation', 'body', 'caption', 'captionMessage', 'vcard'].includes(key)) {
+                node[key] = '[CONTEÚDO TEXTUAL OMITIDO]';
+            } else if (['secret', 'token', 'authorization', 'cookie', 'password'].includes(key)) {
+                node[key] = '[OMITIDO]';
+            } else if (['headers', 'requestHeaders'].includes(key)) {
+                node[key] = '[CABEÇALHOS OMITIDOS]';
+            } else if (typeof node[key] === 'string') {
+                const phoneRegex = /\b(\d{4})(\d{4,5})(\d{4})\b/g;
+                node[key] = node[key].replace(phoneRegex, '$1****$3');
+            } else if (typeof node[key] === 'object') {
+                maskNode(node[key]);
+            }
+        }
+    }
+    maskNode(obj);
+    return obj;
+}
+
+/**
  * GET /api/v1/ops/logs
  */
 router.get('/logs', (req, res) => {
@@ -292,7 +365,8 @@ router.get('/logs', (req, res) => {
     };
 
     const logs = EngineLog.getLogs(filters, 100);
-    res.json({ status: 'success', data: logs });
+    const sanitizedLogs = logs.map(l => ({ ...l, details: sanitizePayload(l.details) }));
+    res.json({ status: 'success', data: sanitizedLogs });
 });
 
 /**
@@ -306,8 +380,30 @@ router.get('/integration', (req, res) => {
 
     const successLogs = EngineLog.getLogs({ category: 'webhook', event: 'webhook.dispatch_success' }, 1000)
         .filter(l => l.created_at >= startStr);
-    const errorLogs = EngineLog.getLogs({ category: 'webhook', event: 'webhook.dispatch_failed' }, 1000)
-        .filter(l => l.created_at >= startStr);
+    const errorLogs = EngineLog.getLogs({ category: 'webhook', event: 'webhook.dispatch_failed' }, 100);
+
+    const errorsToday = errorLogs.filter(l => l.created_at >= startStr);
+
+    let lastSuccessStr = null;
+    if (successLogs.length > 0) {
+        const log = successLogs[0];
+        const status = log.details && log.details.statusCode ? `HTTP ${log.details.statusCode}` : 'HTTP 200';
+        lastSuccessStr = `${new Date(log.created_at).toLocaleString()} · ${log.details?.eventType || log.event} · ${status}`;
+    }
+
+    let lastErrorStr = null;
+    if (errorsToday.length > 0) {
+        const log = errorsToday[0];
+        lastErrorStr = `${new Date(log.created_at).toLocaleString()} · ${log.details?.eventType || log.event} · Erro`;
+    }
+
+    const recentFailures = errorLogs.slice(0, 10).map(l => ({
+        createdAt: l.created_at,
+        sessionId: l.session_id,
+        eventType: l.details?.eventType || l.event,
+        error: l.details?.error || l.message,
+        details: sanitizePayload(l.details)
+    }));
 
     res.json({
         status: 'success',
@@ -318,9 +414,10 @@ router.get('/integration', (req, res) => {
             publicUrl: process.env.APIWS_PUBLIC_URL,
             stats: {
                 successToday: successLogs.length,
-                errorsToday: errorLogs.length,
-                lastSuccess: successLogs.length > 0 ? successLogs[0].created_at : null,
-                lastError: errorLogs.length > 0 ? errorLogs[0].created_at : null
+                errorsToday: errorsToday.length,
+                lastSuccess: lastSuccessStr,
+                lastError: lastErrorStr,
+                recentFailures: recentFailures
             }
         }
     });

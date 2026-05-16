@@ -55,12 +55,28 @@
                         <button class="btn btn-primary" onclick="testWebhook()" id="btnTest">Disparar Teste</button>
                         <div id="testResult" style="margin-top: 1rem; font-size: 0.875rem;"></div>
                     </div>
+
+                    <div id="failuresContainer"></div>
                 </div>
             </div>
         </div>
     </main>
 
+    <!-- Modal Detalhes da Falha -->
+    <div id="failureDetailsModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Detalhes da Falha de Integração</h3>
+                <button class="close-modal" onclick="closeFailureDetailsModal()">&times;</button>
+            </div>
+            <div id="failureDetailsContent" style="font-size: 0.875rem; color: #333;">
+                Carregando...
+            </div>
+        </div>
+    </div>
+
     <script src="/ops/js/ops-auth.js"></script>
+    <script src="/ops/js/ops-utils.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             const user = await checkOpsAuth();
@@ -79,9 +95,56 @@
                     document.getElementById('iPublicUrl').textContent = info.publicUrl || '-';
                     document.getElementById('iSuccessCount').textContent = info.stats.successToday;
                     document.getElementById('iErrorCount').textContent = info.stats.errorsToday;
+
+                    document.getElementById('iLastSuccess').textContent = info.stats.lastSuccess || 'Nenhum sucesso registrado no período.';
+                    document.getElementById('iLastError').textContent = info.stats.lastError || 'Nenhum erro registrado no período.';
+
+                    window.integrationFailures = info.stats.recentFailures || [];
+                    const failures = window.integrationFailures;
+                    let failuresHtml = '<h3 class="card-title mt-4 mb-2" style="margin-top: 1.5rem; border-top: 1px solid var(--border-color); padding-top: 1.5rem;">Falhas Recentes</h3>';
+                    if(failures.length === 0) {
+                        failuresHtml += '<p>Nenhuma falha recente encontrada.</p>';
+                    } else {
+                        failuresHtml += '<table class="w-full text-left" style="width: 100%; border-collapse: collapse; margin-top: 1rem;"><thead><tr style="border-bottom: 1px solid var(--border-color);"><th>Data/Hora</th><th>Sessão</th><th>Evento</th><th>Erro</th><th>Ações</th></tr></thead><tbody>';
+                        failures.forEach((f, idx) => {
+                            failuresHtml += `<tr style="border-bottom: 1px solid #eee;">
+                                <td>${new Date(f.createdAt).toLocaleString()}</td>
+                                <td>${f.sessionId || '-'}</td>
+                                <td>${f.eventType}</td>
+                                <td>${f.error}</td>
+                                <td><button class="btn btn-sm btn-secondary" onclick="showFailureDetails(${idx})">Ver detalhes</button></td>
+                            </tr>`;
+                        });
+                        failuresHtml += '</tbody></table>';
+                    }
+                    document.getElementById('failuresContainer').innerHTML = failuresHtml;
                 }
             } catch(e) {}
         }
+
+        window.showFailureDetails = function(index) {
+            const f = window.integrationFailures[index];
+            if(f) {
+                const dateStr = new Date(f.createdAt).toLocaleString();
+                let html = `<div style="margin-bottom: 0.5rem;"><strong>Data/Hora:</strong> ${dateStr}</div>`;
+                html += `<div style="margin-bottom: 0.5rem;"><strong>Sessão:</strong> ${f.sessionId || '-'}</div>`;
+                html += `<div style="margin-bottom: 0.5rem;"><strong>Evento:</strong> ${f.eventType}</div>`;
+                html += `<div style="margin-bottom: 0.5rem;"><strong>Erro:</strong> ${f.error}</div>`;
+                html += `<div style="margin-bottom: 1rem;"><strong>Destino:</strong> ${document.getElementById('iWebhookUrl').textContent}</div>`;
+                if(f.details) {
+                    const sanitizedDetails = sanitizeDetails(f.details);
+                    html += `<div><strong>Payload/Detalhes:</strong></div>`;
+                    html += `<pre style="background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; margin-top: 0.5rem;">${JSON.stringify(sanitizedDetails, null, 2)}</pre>`;
+                }
+
+                document.getElementById('failureDetailsContent').innerHTML = html;
+                document.getElementById('failureDetailsModal').classList.add('active');
+            }
+        };
+
+        window.closeFailureDetailsModal = function() {
+            document.getElementById('failureDetailsModal').classList.remove('active');
+        };
 
         async function testWebhook() {
             const btn = document.getElementById('btnTest');
