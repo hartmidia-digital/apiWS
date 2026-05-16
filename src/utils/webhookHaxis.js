@@ -109,7 +109,7 @@ function normalizePreview(eventType, rawPayload = {}) {
 }
 
 /**
- * Envia o webhook para a API limpa do HAXIS.
+ * Envia o webhook para a API limpa do HAXIS (agora usando a fila de entregas).
  * @param {string} eventType
  * @param {string} engineSessionId
  * @param {any} rawPayload
@@ -130,7 +130,6 @@ async function sendWebhook(eventType, engineSessionId, rawPayload) {
         normalized_preview: normalizePreview(eventType, rawPayload)
     };
 
-    const payloadString = JSON.stringify(payload);
     const headers = {
         'Content-Type': 'application/json',
         'X-Haxis-Event-Id': payload.event_id,
@@ -138,28 +137,25 @@ async function sendWebhook(eventType, engineSessionId, rawPayload) {
         'X-Haxis-Timestamp': payload.timestamp
     };
 
-    if (WEBHOOK_SECRET) {
-        headers['X-Haxis-Signature'] = crypto.createHmac('sha256', WEBHOOK_SECRET)
-            .update(payloadString)
-            .digest('hex');
-    }
+    // Note: Signature is calculated later in WebhookDeliveryService to ensure it matches the actual sent string exactly
 
-    const timeoutMs = parseInt(process.env.WEBHOOK_TIMEOUT_MS || '5000', 10);
+    // Lazy require to avoid circular dependencies
+    const WebhookDeliveryService = require('../services/webhookDeliveryService');
 
     try {
-        axios.post(WEBHOOK_URL, payloadString, {
-            headers,
-            timeout: timeoutMs
-        }).then(() => {
-            logger.debug(`Webhook enviado: ${eventType} para sessao ${engineSessionId}`);
-            engineLogger.info('webhook', 'webhook.dispatch_success', engineSessionId, `Webhook enviado com sucesso (${eventType})`, { eventId: payload.event_id, eventType });
-        }).catch(error => {
-            logger.error(`Falha ao enviar webhook ${eventType}: ${error.message}`);
-            engineLogger.error('webhook', 'webhook.dispatch_failed', engineSessionId, `Falha ao enviar webhook (${eventType})`, { eventId: payload.event_id, eventType, error: error.message });
+        await WebhookDeliveryService.enqueueDelivery({
+            event_id: payload.event_id,
+            event_type: payload.event_type,
+            engine_id: payload.engine_id,
+            engine_base_url: payload.engine_base_url,
+            engine_session_id: payload.engine_session_id,
+            webhook_url: WEBHOOK_URL,
+            payload_json: payload,
+            headers_json: headers
         });
     } catch (error) {
-        logger.error(`Falha ao processar webhook ${eventType}: ${error.message}`);
-        engineLogger.error('webhook', 'webhook.dispatch_failed', engineSessionId, `Erro interno ao processar webhook (${eventType})`, { eventId: payload.event_id, eventType, error: error.message });
+        logger.error(`Falha ao enfileirar webhook ${eventType}: ${error.message}`);
+        engineLogger.error('webhook', 'webhook.dispatch_failed', engineSessionId, `Erro interno ao enfileirar webhook (${eventType})`, { eventId: payload.event_id, eventType, error: error.message });
     }
 }
 

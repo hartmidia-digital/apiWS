@@ -3,6 +3,17 @@
 Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 
 ## [Unreleased]
+### Added
+- **Confiabilidade de Entrega de Webhooks (Fila Persistente):**
+  - Adicionada tabela SQLite `webhook_deliveries` para persistir e enfileirar webhooks antes do envio, separando o status de entrega do log de eventos.
+  - Implementado Worker de Background com repetições automáticas (Retry) via backoff progressivo em caso de falhas temporárias de rede (timeouts, HTTP 500, etc) ao comunicar com a APIH.
+  - Preservação estrita do `event_id` durante retentativas para garantir idempotência do lado da APIH.
+  - Painel Operacional `/ops/integration.html` reestruturado para exibir métricas da fila (Pendentes, Em Retry, Falhas), listagem detalhada de todos os envios e suporte à intervenção manual (reprocessar agendamento imediatamente ou marcar erro definitivo como ignorado).
+  - Implementação de recuperação de "Stale Lock" para webhooks travados em `delivering` há mais de 300 segundos, evitando perda de eventos caso a aplicação crashe em um exato milissegundo de envio, além de possibilitar ação via UI para força-los.
+  - O reprocessamento manual via `/ops` atualizará a `webhook_url` presa na tentativa do evento de volta para a registrada atualmente no `.env` global, impedindo loops em endpoints defasados após um reparo por configuração.
+
+> **Aviso de Arquitetura**: A fila persistente em SQLite destina-se nativamente a rodar sob arquitetura **Single Process** / **Single Node** ou via modo **PM2 Fork**. Não escale utilizando o **PM2 Cluster Mode** para este motor, sob o risco de criar Race Conditions entre os workers que competirão pela leitura e lock do banco de dados na memória compartilhada. Um aviso será emitido caso clusters PM2 sejam detectados.
+
 ### Fixes & Compatibility (Compatibilidade WA Web/Baileys)
 - Atualização da versão do pacote `@whiskeysockets/baileys` de `^7.0.0-rc.9` para `^7.0.0-rc11` e ajustes de compatibilidade para resolver o problema onde o WhatsApp marcava mensagens como enviadas por "versão antiga".
 - Remoção do uso forçado de `fetchLatestWaWebVersion()` devido a possíveis desalinhamentos com os protobufs do Baileys. A prioridade agora é o `fetchLatestBaileysVersion()`, com fallback automático.

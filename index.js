@@ -554,6 +554,15 @@ User.ensureAdmin(process.env.ADMIN_DASHBOARD_PASSWORD);
     }
 })();
 
+// PM2 Cluster Mode Warning
+if (process.env.NODE_APP_INSTANCE !== undefined && process.env.NODE_APP_INSTANCE !== '0') {
+    console.warn('[WARNING] PM2 Cluster mode detected! Webhook Delivery retry queue uses SQLite and is only safe in Single Process mode. Multi-node usage may cause race conditions.');
+}
+
+// Initialize Webhook Delivery Worker
+const webhookDeliveryService = require('./src/services/webhookDeliveryService');
+webhookDeliveryService.startWorker();
+
 // Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
@@ -564,6 +573,7 @@ server.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGINT', () => {
     console.log('\n[SYSTEM] Shutting down...');
+    webhookDeliveryService.stopWorker();
 
     // Disconnect all WhatsApp sessions
     for (const [sessionId] of whatsappService.getActiveSessions()) {

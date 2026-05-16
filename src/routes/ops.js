@@ -373,37 +373,38 @@ router.get('/logs', (req, res) => {
  * GET /api/v1/ops/integration
  */
 router.get('/integration', (req, res) => {
-    // Stats from engine logs today
-    const startOfDay = new Date();
-    startOfDay.setHours(0,0,0,0);
-    const startStr = startOfDay.toISOString();
+    const WebhookDelivery = require('../models/WebhookDelivery');
 
-    const successLogs = EngineLog.getLogs({ category: 'webhook', event: 'webhook.dispatch_success' }, 1000)
-        .filter(l => l.created_at >= startStr);
-    const errorLogs = EngineLog.getLogs({ category: 'webhook', event: 'webhook.dispatch_failed' }, 100);
+    let statsData = {
+        successToday: 0,
+        errorsToday: 0,
+        pendingCount: 0,
+        retryingCount: 0,
+        failedCount: 0,
+        blockedCount: 0,
+        lastSuccess: null,
+        lastError: null
+    };
 
-    const errorsToday = errorLogs.filter(l => l.created_at >= startStr);
+    try {
+        statsData = WebhookDelivery.getStats();
+    } catch (e) {
+        // Fallback or ignore if table not created
+        console.error("Error fetching WebhookDelivery stats", e);
+    }
 
     let lastSuccessStr = null;
-    if (successLogs.length > 0) {
-        const log = successLogs[0];
-        const status = log.details && log.details.statusCode ? `HTTP ${log.details.statusCode}` : 'HTTP 200';
-        lastSuccessStr = `${new Date(log.created_at).toLocaleString()} · ${log.details?.eventType || log.event} · ${status}`;
+    if (statsData.lastSuccess) {
+        const ls = statsData.lastSuccess;
+        const status = ls.last_http_status ? `HTTP ${ls.last_http_status}` : 'HTTP 200';
+        lastSuccessStr = `${new Date(ls.delivered_at || ls.created_at).toLocaleString()} · ${ls.event_type} · ${status}`;
     }
 
     let lastErrorStr = null;
-    if (errorsToday.length > 0) {
-        const log = errorsToday[0];
-        lastErrorStr = `${new Date(log.created_at).toLocaleString()} · ${log.details?.eventType || log.event} · Erro`;
+    if (statsData.lastError) {
+        const le = statsData.lastError;
+        lastErrorStr = `${new Date(le.updated_at || le.created_at).toLocaleString()} · ${le.event_type} · ${le.last_error || 'Erro'}`;
     }
-
-    const recentFailures = errorLogs.slice(0, 10).map(l => ({
-        createdAt: l.created_at,
-        sessionId: l.session_id,
-        eventType: l.details?.eventType || l.event,
-        error: l.details?.error || l.message,
-        details: sanitizePayload(l.details)
-    }));
 
     res.json({
         status: 'success',
@@ -412,16 +413,107 @@ router.get('/integration', (req, res) => {
             hasSecret: !!process.env.WEBHOOK_SECRET,
             engineId: process.env.APIWS_ENGINE_ID,
             publicUrl: process.env.APIWS_PUBLIC_URL,
+            retryEnabled: process.env.WEBHOOK_RETRY_ENABLED !== 'false',
+            maxAttempts: process.env.WEBHOOK_MAX_ATTEMPTS || 5,
             stats: {
-                successToday: successLogs.length,
-                errorsToday: errorsToday.length,
+                successToday: statsData.successToday,
+                errorsToday: statsData.errorsToday,
+                pendingCount: statsData.pendingCount,
+                retryingCount: statsData.retryingCount,
+                failedCount: statsData.failedCount,
+                blockedCount: statsData.blockedCount,
                 lastSuccess: lastSuccessStr,
-                lastError: lastErrorStr,
-                recentFailures: recentFailures
+                lastError: lastErrorStr
             }
         }
     });
 });
+
+/**
+ * GET /api/v1/ops/webhook-deliveries
+ */
+router.get('/webhook-deliveries', (req, res) => {
+    const WebhookDelivery = require('../models/WebhookDelivery');
+    const { status, engine_session_id, event_type, attention_required, limit = 50, offset = 0 } = req.query;
+
+    try {
+        const filters = {};
+        if (status) filters.status = status;
+        if (engine_session_id) filters.engine_session_id = engine_session_id;
+        if (event_type) filters.event_type = event_type;
+        if (attention_required === 'true') filters.attention_required = true;
+
+        const limitNum = parseInt(limit, 10);
+        const offsetNum = parseInt(offset, 10);
+
+        const deliveries = WebhookDelivery.getDeliveries(filters, limitNum, offsetNum);
+
+        // Remove sensitive payloads from output
+        const sanitized = deliveries.map(d => {
+            const copy = { ...d };
+            delete copy.payload_json;
+            delete copy.headers_json;
+            return copy;
+        });
+
+        res.json({ status: 'success', data: sanitized });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+});
+
+/**
+ * GET /api/v1/ops/webhook-deliveries/:id
+ */
+router.get('/webhook-deliveries/:id', (req, res) => {
+    const WebhookDelivery = require('../models/WebhookDelivery');
+    try {
+        const delivery = WebhookDelivery.findById(req.params.id);
+        if (!delivery) {
+            return res.status(404).json({ status: 'error', message: 'Delivery not found' });
+        }
+
+        // Sanitize the full payload specifically for details
+        const sanitizedDelivery = { ...delivery };
+        sanitizedDelivery.payload_json = sanitizePayload(delivery.payload_json);
+        delete sanitizedDelivery.headers_json;
+
+        res.json({ status: 'success', data: sanitizedDelivery });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+});
+
+/**
+ * POST /api/v1/ops/webhook-deliveries/:id/retry
+ */
+router.post('/webhook-deliveries/:id/retry', async (req, res) => {
+    const webhookDeliveryService = require('../services/webhookDeliveryService');
+    try {
+        const success = await webhookDeliveryService.forceRetry(req.params.id);
+        if (success) {
+            res.json({ status: 'success', message: 'Retry manual agendado com sucesso.' });
+        } else {
+            res.status(400).json({ status: 'error', message: 'Status atual não permite reprocessamento.' });
+        }
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+});
+
+/**
+ * POST /api/v1/ops/webhook-deliveries/:id/ignore
+ */
+router.post('/webhook-deliveries/:id/ignore', (req, res) => {
+    const webhookDeliveryService = require('../services/webhookDeliveryService');
+    try {
+        const success = webhookDeliveryService.ignoreDelivery(req.params.id);
+        res.json({ status: 'success', message: 'Entrega ignorada com sucesso.' });
+    } catch (error) {
+        res.status(500).json({ status: 'error', message: error.message });
+    }
+});
+
 
 /**
  * POST /api/v1/ops/webhooks/test
