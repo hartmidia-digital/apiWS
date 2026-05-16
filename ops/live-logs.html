@@ -32,24 +32,35 @@
         </header>
 
         <div class="content-wrapper">
-            <div class="filters-bar">
-                <input type="text" id="filterSessionId" placeholder="Filtrar por Session ID">
-                <select id="filterLevel">
-                    <option value="">Todos os Níveis</option>
+            <div class="filters-bar" style="flex-wrap: wrap;">
+                <input type="text" id="filterSessionId" placeholder="Sessão, Telefone ou ID" oninput="applyFilters()">
+                <input type="text" id="filterText" placeholder="Buscar texto no evento" oninput="applyFilters()">
+                <select id="filterLevel" onchange="applyFilters()">
+                    <option value="">Nível: Todos</option>
                     <option value="INFO">INFO</option>
                     <option value="WARN">WARN</option>
                     <option value="ERROR">ERROR</option>
                     <option value="FATAL">FATAL</option>
                     <option value="DEBUG">DEBUG</option>
                 </select>
-                <select id="filterCategory">
-                    <option value="">Todas as Categorias</option>
+                <select id="filterCategory" onchange="applyFilters()">
+                    <option value="">Categoria: Todas</option>
                     <option value="system">Sistema</option>
                     <option value="session">Sessão</option>
                     <option value="webhook">Webhook</option>
                     <option value="message">Mensagem</option>
                     <option value="contact">Contato</option>
                     <option value="group">Grupo</option>
+                </select>
+                <select id="filterStatus" onchange="applyFilters()">
+                    <option value="">Status: Todos</option>
+                    <option value="CONNECTED">Conectado</option>
+                    <option value="DISCONNECTED">Desconectado</option>
+                    <option value="RECONNECTING">Reconectando</option>
+                    <option value="GENERATING_QR">QR Gerado</option>
+                    <option value="webhook.dispatch_success">Webhook Sucesso</option>
+                    <option value="webhook.dispatch_failed">Webhook Falha</option>
+                    <option value="message.received">Mensagem Recebida</option>
                 </select>
                 <button class="btn btn-secondary" onclick="clearTerminal()">Limpar</button>
                 <button class="btn btn-secondary" id="btnPause" onclick="togglePause()">Pausar</button>

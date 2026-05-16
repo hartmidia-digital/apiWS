@@ -2,6 +2,7 @@
 let ws = null;
 let isPaused = false;
 const maxLogs = 1000;
+window.liveLogsData = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
     const user = await checkOpsAuth();
@@ -16,7 +17,8 @@ async function fetchHistoricalLogs() {
         const res = await fetch('/api/v1/ops/logs');
         const data = await res.json();
         if (data.status === 'success' && data.data && data.data.length > 0) {
-            data.data.reverse().forEach(log => appendLog(log));
+            window.liveLogsData = data.data.reverse();
+            applyFilters();
         }
     } catch (e) {
         console.error('[Ops WS] Erro ao buscar logs historicos', e);
@@ -32,22 +34,113 @@ function togglePause() {
     } else {
         btn.textContent = 'Pausar';
         btn.classList.replace('btn-primary', 'btn-secondary');
+        applyFilters(); // render any logs that came in while paused
     }
 }
 
-function clearTerminal() { document.getElementById('terminal').innerHTML = ''; }
+function clearTerminal() {
+    window.liveLogsData = [];
+    document.getElementById('terminal').innerHTML = '';
+}
 
-function appendLog(log) {
-    if (isPaused) return;
-    const filterSessionId = document.getElementById('filterSessionId').value.trim();
+function applyFilters() {
+    const term = document.getElementById('terminal');
+    term.innerHTML = ''; // clear term to re-render
+
+    const filterSessionId = document.getElementById('filterSessionId').value.trim().toLowerCase();
     const filterLevel = document.getElementById('filterLevel').value;
     const filterCategory = document.getElementById('filterCategory').value;
+    const filterStatus = document.getElementById('filterStatus').value;
+    const filterText = document.getElementById('filterText').value.trim().toLowerCase();
 
-    if (filterSessionId && log.sessionId !== filterSessionId) return;
+    window.liveLogsData.forEach(log => {
+        // filter session (session ID, or maybe inside details phone/name)
+        if (filterSessionId) {
+            let matchesSession = log.sessionId && log.sessionId.toLowerCase().includes(filterSessionId);
+            if (!matchesSession && log.details) {
+                const detailsStr = JSON.stringify(log.details).toLowerCase();
+                if (detailsStr.includes(filterSessionId)) matchesSession = true;
+            }
+            if (!matchesSession) return;
+        }
+
+        if (filterLevel && log.level !== filterLevel) return;
+        if (filterCategory && log.category !== filterCategory) return;
+
+        // filter operational status mapping
+        if (filterStatus) {
+            const isStatusConnected = filterStatus === 'CONNECTED' && log.event === 'session.status' && log.details?.status === 'CONNECTED';
+            const isStatusDisconnected = filterStatus === 'DISCONNECTED' && log.event === 'session.status' && log.details?.status === 'DISCONNECTED';
+            const isStatusReconnecting = filterStatus === 'RECONNECTING' && log.event === 'session.status' && log.details?.status === 'RECONNECTING';
+            const isStatusGeneratingQr = filterStatus === 'GENERATING_QR' && log.event === 'session.status' && log.details?.status === 'GENERATING_QR';
+
+            const isExactEventMatch = filterStatus === log.event;
+
+            if (!(isStatusConnected || isStatusDisconnected || isStatusReconnecting || isStatusGeneratingQr || isExactEventMatch)) {
+                return;
+            }
+        }
+
+        // filter generic text
+        if (filterText) {
+            const fullLogText = `${log.event} ${log.message} ${log.category} ${JSON.stringify(log.details || {})}`.toLowerCase();
+            if (!fullLogText.includes(filterText)) return;
+        }
+
+        renderLogEntry(log, term);
+    });
+
+    if (document.getElementById('autoScroll').checked) term.scrollTop = term.scrollHeight;
+}
+
+function appendLog(log) {
+    if (window.liveLogsData.length >= maxLogs) window.liveLogsData.shift();
+    window.liveLogsData.push(log);
+
+    if (isPaused) return;
+
+    // Apply quick filters check
+    const filterSessionId = document.getElementById('filterSessionId').value.trim().toLowerCase();
+    const filterLevel = document.getElementById('filterLevel').value;
+    const filterCategory = document.getElementById('filterCategory').value;
+    const filterStatus = document.getElementById('filterStatus').value;
+    const filterText = document.getElementById('filterText').value.trim().toLowerCase();
+
+    if (filterSessionId) {
+        let matchesSession = log.sessionId && log.sessionId.toLowerCase().includes(filterSessionId);
+        if (!matchesSession && log.details) {
+            const detailsStr = JSON.stringify(log.details).toLowerCase();
+            if (detailsStr.includes(filterSessionId)) matchesSession = true;
+        }
+        if (!matchesSession) return;
+    }
     if (filterLevel && log.level !== filterLevel) return;
     if (filterCategory && log.category !== filterCategory) return;
+    if (filterStatus) {
+        const isStatusConnected = filterStatus === 'CONNECTED' && log.event === 'session.status' && log.details?.status === 'CONNECTED';
+        const isStatusDisconnected = filterStatus === 'DISCONNECTED' && log.event === 'session.status' && log.details?.status === 'DISCONNECTED';
+        const isStatusReconnecting = filterStatus === 'RECONNECTING' && log.event === 'session.status' && log.details?.status === 'RECONNECTING';
+        const isStatusGeneratingQr = filterStatus === 'GENERATING_QR' && log.event === 'session.status' && log.details?.status === 'GENERATING_QR';
+
+        const isExactEventMatch = filterStatus === log.event;
+
+        if (!(isStatusConnected || isStatusDisconnected || isStatusReconnecting || isStatusGeneratingQr || isExactEventMatch)) {
+            return;
+        }
+    }
+    if (filterText) {
+        const fullLogText = `${log.event} ${log.message} ${log.category} ${JSON.stringify(log.details || {})}`.toLowerCase();
+        if (!fullLogText.includes(filterText)) return;
+    }
 
     const term = document.getElementById('terminal');
+    renderLogEntry(log, term);
+
+    while (term.children.length > maxLogs) term.removeChild(term.firstChild);
+    if (document.getElementById('autoScroll').checked) term.scrollTop = term.scrollHeight;
+}
+
+function renderLogEntry(log, term) {
     const div = document.createElement('div');
     div.className = 'log-entry';
 
@@ -84,8 +177,6 @@ function appendLog(log) {
 
     div.innerHTML = html;
     term.appendChild(div);
-    while (term.children.length > maxLogs) term.removeChild(term.firstChild);
-    if (document.getElementById('autoScroll').checked) term.scrollTop = term.scrollHeight;
 }
 
 function setupWebSocket() {

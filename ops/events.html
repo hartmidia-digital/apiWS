@@ -60,6 +60,19 @@
         </div>
     </main>
 
+    <!-- Modal Detalhes do Evento -->
+    <div id="detailsModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 class="modal-title">Detalhes do Evento Técnico</h3>
+                <button class="close-modal" onclick="closeDetailsModal()">&times;</button>
+            </div>
+            <div id="detailsContent" style="font-size: 0.875rem; color: #333;">
+                Carregando...
+            </div>
+        </div>
+    </div>
+
     <script src="/ops/js/ops-auth.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
@@ -117,8 +130,24 @@
         window.showDetails = function(id) {
             const log = window.logsData.find(l => l.id === id);
             if(log) {
-                alert(`Data: ${new Date(log.timestamp || log.created_at).toLocaleString()}\nSessão: ${log.sessionId || log.session_id || '-'}\nCategoria: ${log.category}\nEvento Técnico: ${log.event}\nMensagem Operacional: ${log.message}\nDetalhes Técnicos:\n${JSON.stringify(log.details || log.details_json, null, 2)}`);
+                const dateStr = new Date(log.timestamp || log.created_at).toLocaleString();
+                const detailsStr = JSON.stringify(log.details || log.details_json, null, 2);
+
+                let html = `<div style="margin-bottom: 0.5rem;"><strong>Data/Hora:</strong> ${dateStr}</div>`;
+                html += `<div style="margin-bottom: 0.5rem;"><strong>Sessão:</strong> ${log.sessionId || log.session_id || '-'}</div>`;
+                html += `<div style="margin-bottom: 0.5rem;"><strong>Categoria:</strong> ${log.category}</div>`;
+                html += `<div style="margin-bottom: 0.5rem;"><strong>Evento Técnico:</strong> ${log.event}</div>`;
+                html += `<div style="margin-bottom: 1rem;"><strong>Mensagem Operacional:</strong> ${log.message}</div>`;
+                html += `<div><strong>Detalhes Técnicos:</strong></div>`;
+                html += `<pre style="background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; margin-top: 0.5rem;">${detailsStr}</pre>`;
+
+                document.getElementById('detailsContent').innerHTML = html;
+                document.getElementById('detailsModal').classList.add('active');
             }
+        };
+
+        window.closeDetailsModal = function() {
+            document.getElementById('detailsModal').classList.remove('active');
         };
     </script>
 </body>
