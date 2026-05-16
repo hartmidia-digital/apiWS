@@ -70,3 +70,5 @@ Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 - Implementado listagem de identificação humana (telefone/nome) mascarados nas conexões do WhatsApp no painel Ops.
 - Logs técnicos foram reformulados para uma visão operacional e clara (Logs ao Vivo e Histórico de Eventos).
 - Tela de Integração APIH agora exibe informações completas de último erro/sucesso e lista de falhas recentes no webhook.
+- Adicionado sistema de filtros compostos (Sessão, Nível, Categoria, Status Operacional, Busca Textual) nos Logs ao Vivo (Nota: Filtro por Período listado como pendência técnica para futuras implementações em tempo real).
+- Implementada sanitização de payloads de logs diretamente no Backend (`src/routes/ops.js`), impedindo que conteúdos de mensagens, tokens, headers ou senhas sejam trafegados brutos pela rede e exibidos no painel web.

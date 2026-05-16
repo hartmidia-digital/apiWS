@@ -326,6 +326,34 @@ router.delete('/sessions/:id', async (req, res) => {
 });
 
 /**
+ * Sanitiza objetos de detalhes técnicos (payloads), mascarando informações sensíveis no backend.
+ */
+function sanitizePayload(detailsObj) {
+    if (!detailsObj) return detailsObj;
+    let obj = typeof detailsObj === 'string' ? JSON.parse(detailsObj) : JSON.parse(JSON.stringify(detailsObj));
+
+    function maskNode(node) {
+        if (!node || typeof node !== 'object') return;
+        for (const key in node) {
+            if (['text', 'message', 'conversation', 'body', 'caption', 'captionMessage', 'vcard'].includes(key)) {
+                node[key] = '[CONTEÚDO TEXTUAL OMITIDO]';
+            } else if (['secret', 'token', 'authorization', 'cookie', 'password'].includes(key)) {
+                node[key] = '[OMITIDO]';
+            } else if (['headers', 'requestHeaders'].includes(key)) {
+                node[key] = '[CABEÇALHOS OMITIDOS]';
+            } else if (typeof node[key] === 'string') {
+                const phoneRegex = /\b(\d{4})(\d{4,5})(\d{4})\b/g;
+                node[key] = node[key].replace(phoneRegex, '$1****$3');
+            } else if (typeof node[key] === 'object') {
+                maskNode(node[key]);
+            }
+        }
+    }
+    maskNode(obj);
+    return obj;
+}
+
+/**
  * GET /api/v1/ops/logs
  */
 router.get('/logs', (req, res) => {
@@ -337,7 +365,8 @@ router.get('/logs', (req, res) => {
     };
 
     const logs = EngineLog.getLogs(filters, 100);
-    res.json({ status: 'success', data: logs });
+    const sanitizedLogs = logs.map(l => ({ ...l, details: sanitizePayload(l.details) }));
+    res.json({ status: 'success', data: sanitizedLogs });
 });
 
 /**
@@ -372,7 +401,8 @@ router.get('/integration', (req, res) => {
         createdAt: l.created_at,
         sessionId: l.session_id,
         eventType: l.details?.eventType || l.event,
-        error: l.details?.error || l.message
+        error: l.details?.error || l.message,
+        details: sanitizePayload(l.details)
     }));
 
     res.json({
