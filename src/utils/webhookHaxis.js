@@ -84,8 +84,19 @@ function normalizePreview(eventType, rawPayload = {}) {
         return messagePreview(rawPayload);
     }
 
-    if (['message.sent', 'message.status', 'message.error', 'message.deleted', 'message.edited'].includes(eventType)) {
+    if (['message.sent', 'message.status', 'message.error', 'message.edited'].includes(eventType)) {
         return statusPreview(eventType, rawPayload);
+    }
+
+    if (eventType === 'message.delete_detected') {
+        const key = rawPayload.keys?.[0] || rawPayload.key || {};
+        return {
+            message_id: key.id || rawPayload.id || '',
+            chat_id: key.remoteJid || rawPayload.remoteJid || '',
+            action: 'delete_detected',
+            preserve_history: true,
+            source_event_key: `message_delete_${key.id || rawPayload.id}_${Date.now()}`
+        };
     }
 
     if (eventType === 'group.update' || eventType === 'group.participants.update') {
@@ -102,6 +113,121 @@ function normalizePreview(eventType, rawPayload = {}) {
             jid: rawPayload.id || rawPayload.jid || '',
             name: rawPayload.name || rawPayload.notify || rawPayload.verifiedName || '',
             hasAvatar: Boolean(rawPayload.avatarUrl || rawPayload.imgUrl || rawPayload.profilePictureUrl)
+        };
+    }
+
+    if (eventType === 'message.reaction') {
+        const key = rawPayload.key || {};
+        return {
+            message_id: key.id || '',
+            remote_jid: key.remoteJid || '',
+            participant_jid: key.participant || rawPayload.sender || '',
+            reaction: rawPayload.reaction || rawPayload.text || '',
+            action: (rawPayload.reaction || rawPayload.text) ? 'added' : 'removed',
+            source_event_key: `reaction_${key.id}_${key.participant || rawPayload.sender}_${rawPayload.reaction || rawPayload.text || 'removed'}`
+        };
+    }
+
+    if (eventType === 'call.received' || eventType === 'call.update') {
+        return {
+            call_id: rawPayload.id || '',
+            from: rawPayload.from || rawPayload.chatId || '',
+            call_type: rawPayload.isVideo ? 'video' : (rawPayload.isGroup ? 'group' : 'audio'),
+            status: rawPayload.status || 'unknown',
+            source_event_key: `call_${rawPayload.id}_${rawPayload.status}`
+        };
+    }
+
+    if (eventType === 'blocklist.update') {
+        const action = rawPayload.action || 'unknown';
+        const jids = rawPayload.blocklist || [];
+        const maskedJids = jids.map(j => {
+            const phone = j.split('@')[0];
+            return phone.length > 4 ? phone.substring(0, 4) + '****' + phone.substring(phone.length - 4) : phone;
+        });
+
+        return {
+            jid_masked: maskedJids[0] || '',
+            action: action,
+            source_event_key: `blocklist_${action}_${Date.now()}`
+        };
+    }
+
+    if (eventType === 'blocklist.set') {
+        const jids = rawPayload.blocklist || [];
+        const maskedJids = jids.map(j => {
+            const phone = j.split('@')[0];
+            return phone.length > 4 ? phone.substring(0, 4) + '****' + phone.substring(phone.length - 4) : phone;
+        });
+
+        return {
+            total_items: jids.length,
+            items_masked: maskedJids
+        };
+    }
+
+    if (eventType === 'newsletter.event') {
+        return {
+            newsletter_id: rawPayload.id || rawPayload.jid || '',
+            event_subtype: rawPayload.type || rawPayload.subtype || 'unknown',
+            source_event_key: `newsletter_${rawPayload.id || rawPayload.jid}_${rawPayload.type || rawPayload.subtype}_${Date.now()}`
+        };
+    }
+
+    if (eventType === 'label.update') {
+        return {
+            label_id: rawPayload.id || '',
+            label_name: rawPayload.name || '',
+            target_id: rawPayload.targetId || rawPayload.jid || '',
+            action: rawPayload.action || rawPayload.type || 'unknown',
+            source_event_key: `label_${rawPayload.id}_${rawPayload.targetId || rawPayload.jid}_${rawPayload.action || rawPayload.type}`
+        };
+    }
+
+    if (eventType === 'chat.upsert') {
+        return {
+            chat_id: rawPayload.id || rawPayload.jid || '',
+            chat_type: rawPayload.id?.endsWith('@g.us') ? 'group' : (rawPayload.id?.endsWith('@newsletter') ? 'newsletter' : 'individual'),
+            unread_count: rawPayload.unreadCount || 0,
+            archived: rawPayload.archived || false,
+            pinned: rawPayload.pinned || false,
+            muted: rawPayload.muteEndTime ? true : false,
+            source: rawPayload.source || 'unknown',
+            source_event_key: `chat_upsert_${rawPayload.id || rawPayload.jid}_${Date.now()}`
+        };
+    }
+
+    if (eventType === 'chat.update') {
+        const changedFields = Object.keys(rawPayload).filter(k => k !== 'id' && k !== 'jid');
+        return {
+            chat_id: rawPayload.id || rawPayload.jid || '',
+            changed_fields: changedFields,
+            unread_count: rawPayload.unreadCount !== undefined ? rawPayload.unreadCount : null,
+            archived: rawPayload.archived !== undefined ? rawPayload.archived : null,
+            pinned: rawPayload.pinned !== undefined ? rawPayload.pinned : null,
+            muted: rawPayload.muteEndTime !== undefined ? (rawPayload.muteEndTime ? true : false) : null,
+            source: rawPayload.source || 'unknown',
+            source_event_key: `chat_update_${rawPayload.id || rawPayload.jid}_${Date.now()}`
+        };
+    }
+
+    if (eventType === 'chat.delete_detected') {
+        return {
+            chat_id: rawPayload.id || rawPayload.jid || rawPayload.chatId || '',
+            action: 'delete_detected',
+            preserve_history: true,
+            source_event_key: `chat_delete_${rawPayload.id || rawPayload.jid || rawPayload.chatId}_${Date.now()}`
+        };
+    }
+
+    if (eventType === 'message.media_update') {
+        return {
+            message_id: rawPayload.key?.id || rawPayload.id || '',
+            media_type: rawPayload.media?.mediaType || rawPayload.mediaType || 'unknown',
+            mime_type: rawPayload.media?.mimetype || rawPayload.mimetype || '',
+            file_size: rawPayload.media?.fileLength || rawPayload.fileLength || 0,
+            status: rawPayload.error ? 'failed' : 'updated',
+            source_event_key: `media_update_${rawPayload.key?.id || rawPayload.id}_${Date.now()}`
         };
     }
 
@@ -138,6 +264,13 @@ async function sendWebhook(eventType, engineSessionId, rawPayload) {
     };
 
     // Note: Signature is calculated later in WebhookDeliveryService to ensure it matches the actual sent string exactly
+
+    // Registra log seguro e local sem payload cru
+    engineLogger.info('webhook', `event.${eventType}`, engineSessionId, `Preparando webhook (${eventType})`, {
+        eventId: payload.event_id,
+        eventType: payload.event_type,
+        normalized_preview: payload.normalized_preview
+    });
 
     // Lazy require to avoid circular dependencies
     const WebhookDeliveryService = require('../services/webhookDeliveryService');
