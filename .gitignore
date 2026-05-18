@@ -42,6 +42,10 @@ Super-Light-Web-WhatsApp-API-Server.code-workspace
 
 # Backup & Temporary Files
 *.bak
+*.tar.gz
+nginx_*.conf
+deploy.tar.gz
+scratch/
 .pm2/
 
 # Development & Testing Files
