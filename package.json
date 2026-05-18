@@ -15,6 +15,7 @@
     "fix:sqlite": "node fix-sqlite3.js",
     "setup:storage": "node scripts/setup-storage.js",
     "check:production": "node scripts/check-production.js",
+    "media-handoff:cleanup": "node scripts/media-handoff-cleanup.js",
     "postinstall": "npm run fix:sqlite || true"
   },
   "author": "Alucard0x1",
