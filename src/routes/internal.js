@@ -9,23 +9,16 @@ const engineLogger = require('../utils/engineLogger');
 const requireInternalAuth = (req, res, next) => {
     const internalSecret = process.env.MEDIA_HANDOFF_SECRET;
 
-    // Allow either Bearer token or specific header for handoff secret, but if configured it must match
-    if (internalSecret) {
-        const authHeader = req.headers['authorization'];
-        const providedSecret = req.headers['x-haxis-media-secret'] || (authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null);
+    if (!internalSecret) {
+        // Fail closed if handoff secret is missing but route is hit
+        return res.status(500).json({ error: 'Internal Server Error: MEDIA_HANDOFF_SECRET is not configured' });
+    }
 
-        if (!providedSecret || providedSecret !== internalSecret) {
-            return res.status(401).json({ error: 'Unauthorized: Invalid or missing media secret' });
-        }
-    } else {
-        // Fallback to MASTER_API_KEY if MEDIA_HANDOFF_SECRET is not set
-        const masterKey = process.env.MASTER_API_KEY;
-        const authHeader = req.headers['authorization'];
-        const providedKey = req.headers['x-api-key'] || (authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null);
+    const authHeader = req.headers['authorization'];
+    const providedSecret = req.headers['x-haxis-media-secret'] || (authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null);
 
-        if (!masterKey || providedKey !== masterKey) {
-            return res.status(401).json({ error: 'Unauthorized: Invalid or missing authentication' });
-        }
+    if (!providedSecret || providedSecret !== internalSecret) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid or missing media secret' });
     }
 
     next();
@@ -38,10 +31,10 @@ const requireInternalAuth = (req, res, next) => {
 router.get('/media-handoff/:handoffId/download', requireInternalAuth, (req, res) => {
     try {
         const { handoffId } = req.params;
-        const { token } = req.query;
+        const token = req.headers['x-haxis-media-token'];
 
         if (!token) {
-            return res.status(400).json({ error: 'Missing download token' });
+            return res.status(401).json({ error: 'Unauthorized: Missing download token in header X-Haxis-Media-Token' });
         }
 
         const handoff = MediaHandoff.findById(handoffId);

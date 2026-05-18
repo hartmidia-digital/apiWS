@@ -30,6 +30,11 @@ class MediaHandoffWorker {
 
     start() {
         if (process.env.MEDIA_HANDOFF_ENABLED !== 'true') return;
+        if (!process.env.MEDIA_HANDOFF_SECRET) {
+            logger.error('[MediaHandoffWorker] FAILED TO START: MEDIA_HANDOFF_SECRET is required when feature is enabled.');
+            engineLogger.error('system', 'media_handoff.startup_failed', null, 'Failed to start Media Handoff Worker: Missing MEDIA_HANDOFF_SECRET');
+            return;
+        }
         if (this.isRunning) return;
 
         this.isRunning = true;
@@ -168,7 +173,7 @@ class MediaHandoffWorker {
 
     async emitWebhook(item, token, sizeBytes, checksum, expiresAt) {
         const baseUrl = process.env.MEDIA_HANDOFF_PUBLIC_BASE_URL || process.env.APIWS_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
-        const sourceUrl = `${baseUrl}/api/v1/internal/media-handoff/${item.handoff_id}/download?token=${token}`;
+        const sourceUrl = `${baseUrl}/api/v1/internal/media-handoff/${item.handoff_id}/download`;
 
         const rawPayload = {
             id: item.external_message_id,
@@ -183,6 +188,7 @@ class MediaHandoffWorker {
                 file_name: item.original_filename || `${item.handoff_id}.${item.file_extension}`,
                 file_size_bytes: sizeBytes,
                 source_url: sourceUrl,
+                download_token: token,
                 source_url_expires_at: expiresAt.toISOString(),
                 checksum_sha256: checksum
             }

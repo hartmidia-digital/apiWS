@@ -503,6 +503,8 @@ async function uploadMediaToApih(buffer, type, fileName) {
 
 async function attachMediaAsset(sock, msg, sessionId) {
     const isHandoffEnabled = process.env.MEDIA_HANDOFF_ENABLED === 'true';
+    const hasSecret = !!process.env.MEDIA_HANDOFF_SECRET;
+
     const content = unwrapMessageContent(msg.message);
     const messageType = content ? Object.keys(content)[0] : null;
     const mediaConfig = MEDIA_TYPE_MAP[messageType];
@@ -511,7 +513,7 @@ async function attachMediaAsset(sock, msg, sessionId) {
         return;
     }
 
-    if (isHandoffEnabled) {
+    if (isHandoffEnabled && hasSecret) {
         try {
             const msgContent = content[messageType];
 
