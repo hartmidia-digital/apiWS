@@ -41,6 +41,7 @@ const { errorHandler, notFoundHandler } = require('./src/middleware/errorHandler
 const { initializeApi } = require('./src/routes/api');
 const { sendWebhook } = require('./src/utils/webhookHaxis');
 const opsRoutes = require('./src/routes/ops');
+const internalRoutes = require('./src/routes/internal');
 const engineLogger = require('./src/utils/engineLogger');
 
 // Validate encryption key
@@ -259,6 +260,7 @@ function broadcastToClients(data) {
 
 // Mount new routes
 app.use('/api/v1/ops', opsRoutes);
+app.use('/api/v1/internal', internalRoutes);
 app.use('/admin', authRoutes);
 app.use('/admin/users', userRoutes);
 
@@ -563,6 +565,12 @@ if (process.env.NODE_APP_INSTANCE !== undefined && process.env.NODE_APP_INSTANCE
 const webhookDeliveryService = require('./src/services/webhookDeliveryService');
 webhookDeliveryService.startWorker();
 
+// Initialize Media Handoff Worker
+const mediaHandoffWorker = require('./src/services/mediaHandoffWorker');
+if (process.env.MEDIA_HANDOFF_ENABLED === 'true') {
+    mediaHandoffWorker.start();
+}
+
 // Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
@@ -574,6 +582,7 @@ server.listen(PORT, () => {
 process.on('SIGINT', () => {
     console.log('\n[SYSTEM] Shutting down...');
     webhookDeliveryService.stopWorker();
+    mediaHandoffWorker.stop();
 
     // Disconnect all WhatsApp sessions
     for (const [sessionId] of whatsappService.getActiveSessions()) {

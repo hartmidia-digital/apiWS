@@ -8,11 +8,13 @@ const Session = require('./Session');
 const Campaign = require('./Campaign');
 const Recipient = require('./Recipient');
 const ActivityLog = require('./ActivityLog');
+const MediaHandoff = require('./MediaHandoff');
 
 module.exports = {
     User,
     Session,
     Campaign,
     Recipient,
-    ActivityLog
+    ActivityLog,
+    MediaHandoff
 };
