@@ -275,7 +275,7 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
                     fromMe: msg.key?.fromMe
                 });
 
-                await attachMediaAsset(sock, msg);
+                await attachMediaAsset(sock, msg, sessionId);
                 onMessage(sessionId, msg);
             }
         });
