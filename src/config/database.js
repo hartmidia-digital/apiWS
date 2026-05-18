@@ -195,6 +195,49 @@ function initializeSchema() {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_webhook_deliv_next_retry ON webhook_deliveries(next_retry_at)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_webhook_deliv_created ON webhook_deliveries(created_at)`);
 
+    // Media Handoff table
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS media_handoffs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            handoff_id TEXT UNIQUE NOT NULL,
+            engine_id TEXT,
+            engine_session_id TEXT,
+            source_event_id TEXT,
+            source_event_key TEXT,
+            external_message_id TEXT,
+            chat_id TEXT,
+            message_key_json TEXT,
+            media_type TEXT NOT NULL CHECK(media_type IN ('image', 'video', 'audio', 'voice', 'document', 'archive', 'sticker', 'gif', 'unknown')),
+            mime_type TEXT,
+            original_filename TEXT,
+            safe_filename TEXT,
+            file_extension TEXT,
+            file_size_bytes INTEGER,
+            checksum_sha256 TEXT,
+            status TEXT NOT NULL CHECK(status IN ('detected', 'queued', 'downloading', 'ready_for_apih', 'transferred', 'expired', 'deleted', 'failed')),
+            temp_path TEXT,
+            download_token_hash TEXT,
+            download_url_expires_at DATETIME,
+            transferred_to_apih_at DATETIME,
+            confirmed_by_apih_at DATETIME,
+            deleted_at DATETIME,
+            failure_reason TEXT,
+            attempts INTEGER DEFAULT 0,
+            metadata TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    // Indexes for media_handoffs
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_media_handoffs_handoff_id ON media_handoffs(handoff_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_media_handoffs_engine_session_id ON media_handoffs(engine_session_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_media_handoffs_external_message_id ON media_handoffs(external_message_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_media_handoffs_source_event_key ON media_handoffs(source_event_key)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_media_handoffs_status ON media_handoffs(status)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_media_handoffs_created_at ON media_handoffs(created_at)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_media_handoffs_expires_at ON media_handoffs(download_url_expires_at)`);
+
     console.log('[Database] Schema initialized successfully');
 }
 

@@ -21,6 +21,7 @@ const axios = require('axios');
 const FormData = require('form-data');
 const Session = require('../models/Session');
 const ActivityLog = require('../models/ActivityLog');
+const MediaHandoff = require('../models/MediaHandoff');
 const haxisPaths = require('../config/paths');
 const engineLogger = require('../utils/engineLogger');
 
@@ -500,7 +501,10 @@ async function uploadMediaToApih(buffer, type, fileName) {
     return response.data;
 }
 
-async function attachMediaAsset(sock, msg) {
+async function attachMediaAsset(sock, msg, sessionId) {
+    const isHandoffEnabled = process.env.MEDIA_HANDOFF_ENABLED === 'true';
+    const hasSecret = !!process.env.MEDIA_HANDOFF_SECRET;
+
     const content = unwrapMessageContent(msg.message);
     const messageType = content ? Object.keys(content)[0] : null;
     const mediaConfig = MEDIA_TYPE_MAP[messageType];
@@ -509,22 +513,73 @@ async function attachMediaAsset(sock, msg) {
         return;
     }
 
-    try {
-        const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger });
-        const extension = messageType === 'documentMessage'
-            ? inferDocumentExtension(content)
-            : mediaConfig.extension;
-        const asset = await uploadMediaToApih(buffer, mediaConfig.type, `whatsapp-${msg.key?.id || Date.now()}.${extension}`);
+    if (isHandoffEnabled && hasSecret) {
+        try {
+            const msgContent = content[messageType];
 
-        if (asset?.id) {
-            msg.mediaAssetId = asset.id;
+            let fileSizeBytes = msgContent?.fileLength || null;
+            if (fileSizeBytes) {
+                fileSizeBytes = Number(fileSizeBytes);
+            }
+
+            const originalFilename = messageType === 'documentMessage' ? msgContent?.fileName : null;
+
+            let fileExtension = messageType === 'documentMessage' ? inferDocumentExtension(content) : mediaConfig.extension;
+            let mimeType = msgContent?.mimetype || null;
+
+            const engineId = process.env.APIWS_ENGINE_ID || null;
+
+            MediaHandoff.create({
+                handoff_id: `mh_${msg.key?.id || Date.now()}`,
+                engine_id: engineId,
+                engine_session_id: sessionId,
+                source_event_id: null,
+                source_event_key: `media_detected_${msg.key?.id}_${Date.now()}`,
+                external_message_id: msg.key?.id,
+                chat_id: msg.key?.remoteJid,
+                message_key_json: msg.key,
+                media_type: mediaConfig.type,
+                mime_type: mimeType,
+                original_filename: originalFilename,
+                file_extension: fileExtension,
+                file_size_bytes: fileSizeBytes,
+                status: 'detected',
+                metadata: {
+                    message_type: messageType,
+                    raw_message_json: msg
+                }
+            });
+
+            engineLogger.info('media', 'media.detected', sessionId, 'Media detected and handoff created', {
+                messageId: msg.key?.id,
+                mediaType: mediaConfig.type
+            });
+
+        } catch (error) {
+            logger.error({
+                messageId: msg.key?.id,
+                mediaType: messageType,
+                error: error.message
+            }, '[HAXIS] Media handoff creation failed');
         }
-    } catch (error) {
-        logger.error({
-            messageId: msg.key?.id,
-            mediaType: messageType,
-            error: error.response?.data || error.message
-        }, '[HAXIS] Media upload to ApiH failed');
+    } else {
+        try {
+            const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger });
+            const extension = messageType === 'documentMessage'
+                ? inferDocumentExtension(content)
+                : mediaConfig.extension;
+            const asset = await uploadMediaToApih(buffer, mediaConfig.type, `whatsapp-${msg.key?.id || Date.now()}.${extension}`);
+
+            if (asset?.id) {
+                msg.mediaAssetId = asset.id;
+            }
+        } catch (error) {
+            logger.error({
+                messageId: msg.key?.id,
+                mediaType: messageType,
+                error: error.response?.data || error.message
+            }, '[HAXIS] Media upload to ApiH failed');
+        }
     }
 }
 
