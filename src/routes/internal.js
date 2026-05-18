@@ -8,17 +8,17 @@ const engineLogger = require('../utils/engineLogger');
 // Middleware to protect internal routes
 const requireInternalAuth = (req, res, next) => {
     const internalSecret = process.env.MEDIA_HANDOFF_SECRET;
-
-    if (!internalSecret) {
-        // Fail closed if handoff secret is missing but route is hit
-        return res.status(500).json({ error: 'Internal Server Error: MEDIA_HANDOFF_SECRET is not configured' });
-    }
+    const masterApiKey = process.env.MASTER_API_KEY;
 
     const authHeader = req.headers['authorization'];
     const providedSecret = req.headers['x-haxis-media-secret'] || (authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null);
+    const providedMasterKey = req.headers['x-master-key'];
 
-    if (!providedSecret || providedSecret !== internalSecret) {
-        return res.status(401).json({ error: 'Unauthorized: Invalid or missing media secret' });
+    const isValidSecret = providedSecret && internalSecret && providedSecret === internalSecret;
+    const isValidMasterKey = providedMasterKey && masterApiKey && providedMasterKey === masterApiKey;
+
+    if (!isValidSecret && !isValidMasterKey) {
+        return res.status(401).json({ error: 'Unauthorized: Invalid or missing authentication credentials' });
     }
 
     next();
