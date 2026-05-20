@@ -571,6 +571,12 @@ if (process.env.MEDIA_HANDOFF_ENABLED === 'true') {
     mediaHandoffWorker.start();
 }
 
+// Initialize History Sync Worker
+const historySyncWorker = require('./src/services/historySyncWorker');
+if (process.env.HISTORY_SYNC_ENABLED === 'true') {
+    historySyncWorker.start();
+}
+
 // Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
@@ -583,6 +589,7 @@ process.on('SIGINT', () => {
     console.log('\n[SYSTEM] Shutting down...');
     webhookDeliveryService.stopWorker();
     mediaHandoffWorker.stop();
+    historySyncWorker.stop();
 
     // Disconnect all WhatsApp sessions
     for (const [sessionId] of whatsappService.getActiveSessions()) {
