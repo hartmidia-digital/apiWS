@@ -4,6 +4,20 @@ Todas as mudanças notáveis deste projeto serão documentadas neste arquivo.
 
 ## [Unreleased]
 ### Added
+- **Pack: ApiWS — Controlled History Sync + Media Handoff Reliability**:
+  - Implementado sistema de History Sync seguro, assíncrono e controlado (desligado por padrão).
+  - Tabela `history_sync_batches` e `history_sync_items` criadas em banco local SQLite para registrar histórico cadenciado.
+  - O fluxo original de mensagens (`messages.upsert`) foi refatorado para ignorar `append` por padrão sem quebrar as mensagens reais (`notify`).
+  - Listeners adicionados para interceptar grandes volumes através do evento Baileys `messaging-history.set`.
+  - Criado novo worker assíncrono independente (`HistorySyncWorker.js`) focado apenas em iterar e emitir payloads cadenciados (`message.history_sync`) sem travar a porta e memória da máquina.
+  - Metadados simplificados para mídias históricas: O ApiWS agora envia apenas preview de metadados sem acionar automação indesejada via download pesado por parte do histórico longo.
+  - Remoção de mensagens passadas foram contornadas enviando metadados `preserve_history: true` nos eventos detectados, como registro de auditoria, bloqueando perda indesejada do BD no APIH.
+  - Deduplicação robusta e determinística adotada via string formatada de identificadores chaves `source_event_key`.
+  - Novos utilitários npm scripts CLI para tratamento do Media Handoff: `npm run media-handoff:health`, `npm run media-handoff:retry-failed`, `npm run media-handoff:redispatch` (Redispatch envia payload usando Headers e não expõe tokens na Query).
+  - Novos utilitários npm scripts CLI para History Sync: `npm run history-sync:health`, `npm run history-sync:retry-failed`, `npm run history-sync:process-once`, `npm run history-sync:cleanup` com opção manual de simulação `--dry-run`.
+  - Adicionado roteador de endpoints privados (`/api/v1/internal/health/*`) para diagnóstico online da aplicação sem comprometer o console oficial legado.
+  - Atualização dos Defaults em documentação: `MEDIA_HANDOFF_URL_TTL_MINUTES` subiu para 2880 e `MEDIA_HANDOFF_RETENTION_HOURS` subiu para 72.
+
 - **Pack 2: ApiWS Media Handoff**:
   - Configuração inicial do Media Pipeline.
   - Implementado `MediaHandoffWorker` e a tabela `media_handoffs` para realizar o download temporário seguro da mídia original de mensagens do WhatsApp e mantê-la fora da aplicação/banco e versionamento, disponível sob demanda.

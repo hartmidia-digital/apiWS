@@ -127,4 +127,33 @@ router.post('/media-handoff/:handoffId/confirm-transferred', requireInternalAuth
     }
 });
 
+/**
+ * GET /api/v1/internal/health/media-handoff
+ * Internal route for media handoff health monitoring
+ */
+router.get('/health/media-handoff', requireInternalAuth, (req, res) => {
+    try {
+        const { db } = require('../config/database');
+        const counts = db.prepare(`SELECT status, COUNT(*) as count FROM media_handoffs GROUP BY status`).all();
+        res.json({ success: true, counts });
+    } catch(error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * GET /api/v1/internal/health/history-sync
+ * Internal route for history sync health monitoring
+ */
+router.get('/health/history-sync', requireInternalAuth, (req, res) => {
+    try {
+        const { db } = require('../config/database');
+        const batches = db.prepare(`SELECT status, COUNT(*) as count FROM history_sync_batches GROUP BY status`).all();
+        const items = db.prepare(`SELECT status, COUNT(*) as count FROM history_sync_items GROUP BY status`).all();
+        res.json({ success: true, batches, items });
+    } catch(error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 module.exports = router;

@@ -229,6 +229,51 @@ function initializeSchema() {
         )
     `);
 
+    // Tables for History Sync
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS history_sync_batches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_id TEXT UNIQUE NOT NULL,
+            engine_id TEXT,
+            engine_session_id TEXT,
+            source_event TEXT,
+            status TEXT DEFAULT 'detected' CHECK(status IN ('detected', 'splitting', 'queued', 'processing', 'completed', 'failed', 'cancelled')),
+            total_items INTEGER DEFAULT 0,
+            processed_items INTEGER DEFAULT 0,
+            failed_items INTEGER DEFAULT 0,
+            skipped_items INTEGER DEFAULT 0,
+            duplicate_items INTEGER DEFAULT 0,
+            started_at DATETIME,
+            completed_at DATETIME,
+            error_message TEXT,
+            metadata_json TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS history_sync_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_id TEXT NOT NULL REFERENCES history_sync_batches(batch_id) ON DELETE CASCADE,
+            item_id TEXT UNIQUE NOT NULL,
+            engine_id TEXT,
+            engine_session_id TEXT,
+            item_type TEXT DEFAULT 'unknown' CHECK(item_type IN ('message', 'chat', 'contact', 'media_metadata', 'delete', 'unknown')),
+            source_event_key TEXT UNIQUE,
+            external_message_id TEXT,
+            chat_id TEXT,
+            status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'dispatched', 'skipped', 'duplicate', 'failed')),
+            attempts INTEGER DEFAULT 0,
+            available_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            dispatched_at DATETIME,
+            error_message TEXT,
+            payload_preview_json TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
     // Indexes for media_handoffs
     db.exec(`CREATE INDEX IF NOT EXISTS idx_media_handoffs_handoff_id ON media_handoffs(handoff_id)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_media_handoffs_engine_session_id ON media_handoffs(engine_session_id)`);
@@ -237,6 +282,18 @@ function initializeSchema() {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_media_handoffs_status ON media_handoffs(status)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_media_handoffs_created_at ON media_handoffs(created_at)`);
     db.exec(`CREATE INDEX IF NOT EXISTS idx_media_handoffs_expires_at ON media_handoffs(download_url_expires_at)`);
+
+    // Indexes for history_sync
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_history_sync_batches_batch_id ON history_sync_batches(batch_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_history_sync_items_batch_id ON history_sync_items(batch_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_history_sync_items_item_id ON history_sync_items(item_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_history_sync_items_engine_session_id ON history_sync_items(engine_id, engine_session_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_history_sync_items_source_event_key ON history_sync_items(source_event_key)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_history_sync_items_external_message_id ON history_sync_items(external_message_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_history_sync_items_chat_id ON history_sync_items(chat_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_history_sync_items_status ON history_sync_items(status)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_history_sync_items_available_at ON history_sync_items(available_at)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_history_sync_items_created_at ON history_sync_items(created_at)`);
 
     console.log('[Database] Schema initialized successfully');
 }

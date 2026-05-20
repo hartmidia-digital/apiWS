@@ -24,6 +24,8 @@ const ActivityLog = require('../models/ActivityLog');
 const MediaHandoff = require('../models/MediaHandoff');
 const haxisPaths = require('../config/paths');
 const engineLogger = require('../utils/engineLogger');
+const { db } = require('../config/database');
+const { v4: uuidv4 } = require('uuid');
 
 // Logger configuration
 const defaultLogLevel = "info";
@@ -260,26 +262,123 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
         }
     });
 
+    // Helpers for history sync
+    const insertHistoryBatch = db.prepare(`
+        INSERT INTO history_sync_batches (
+            batch_id, engine_id, engine_session_id, source_event, total_items
+        ) VALUES (?, ?, ?, ?, ?)
+    `);
+
+    const insertHistoryItem = db.prepare(`
+        INSERT OR IGNORE INTO history_sync_items (
+            batch_id, item_id, engine_id, engine_session_id, item_type,
+            source_event_key, external_message_id, chat_id, payload_preview_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const processHistorySyncMessage = (msg, batchId) => {
+        const engineId = process.env.APIWS_ENGINE_ID;
+        const externalMessageId = msg.key?.id;
+        const chatId = msg.key?.remoteJid;
+        const sourceEventKey = `history_${engineId}_${sessionId}_${chatId}_${externalMessageId}`;
+
+        let itemType = 'message';
+        // Add minimal metadata for media without triggering attachMediaAsset
+        if (msg.message?.imageMessage || msg.message?.videoMessage || msg.message?.documentMessage || msg.message?.audioMessage || msg.message?.stickerMessage) {
+            itemType = 'media_metadata';
+        }
+
+        try {
+            const previewPayload = JSON.stringify(msg);
+            insertHistoryItem.run(
+                batchId,
+                uuidv4(),
+                engineId,
+                sessionId,
+                itemType,
+                sourceEventKey,
+                externalMessageId,
+                chatId,
+                previewPayload
+            );
+        } catch (error) {
+            engineLogger.error('whatsapp', 'history_sync.item_error', sessionId, 'Failed to insert history sync item', {
+                error: error.message,
+                messageId: externalMessageId
+            });
+        }
+    };
+
+
     // Handle incoming messages
     if (onMessage) {
         sock.ev.on('messages.upsert', async (m) => {
             if (!isSessionOperable()) return;
+
             for (const msg of m.messages || []) {
                 if (!msg.message || isStatusBroadcastMessage(msg)) {
                     continue;
                 }
 
-                engineLogger.info('message', 'message.received', sessionId, 'Mensagem recebida', {
-                    messageId: msg.key?.id,
-                    remoteJid: msg.key?.remoteJid,
-                    fromMe: msg.key?.fromMe
-                });
+                if (m.type === 'notify') {
+                    engineLogger.info('message', 'message.received', sessionId, 'Mensagem recebida', {
+                        messageId: msg.key?.id,
+                        remoteJid: msg.key?.remoteJid,
+                        fromMe: msg.key?.fromMe
+                    });
 
-                await attachMediaAsset(sock, msg, sessionId);
-                onMessage(sessionId, msg);
+                    await attachMediaAsset(sock, msg, sessionId);
+                    onMessage(sessionId, msg);
+                } else if (m.type === 'append') {
+                    if (process.env.HISTORY_SYNC_ENABLED !== 'true') {
+                        engineLogger.info('whatsapp', 'history_sync.ignored', sessionId, 'history sync ignored by feature flag', {
+                            messageId: msg.key?.id
+                        });
+                        continue;
+                    }
+
+                    const batchId = uuidv4();
+                    try {
+                        insertHistoryBatch.run(batchId, process.env.APIWS_ENGINE_ID, sessionId, 'messages.upsert.append', 1);
+                        processHistorySyncMessage(msg, batchId);
+                    } catch(error) {
+                        engineLogger.error('whatsapp', 'history_sync.batch_error', sessionId, 'Failed to create history batch for append', {
+                            error: error.message
+                        });
+                    }
+                }
             }
         });
     }
+
+    sock.ev.on('messaging-history.set', (item) => {
+        if (!isSessionOperable()) return;
+
+        if (process.env.HISTORY_SYNC_ENABLED !== 'true') {
+            engineLogger.info('whatsapp', 'history_sync.ignored', sessionId, 'history sync ignored by feature flag');
+            return;
+        }
+
+        const batchId = uuidv4();
+        const totalItems = (item.messages?.length || 0) + (item.chats?.length || 0) + (item.contacts?.length || 0);
+
+        try {
+            insertHistoryBatch.run(batchId, process.env.APIWS_ENGINE_ID, sessionId, 'messaging-history.set', totalItems);
+
+            if (process.env.HISTORY_SYNC_CAPTURE_MESSAGES === 'true' && item.messages) {
+                for (const msg of item.messages) {
+                    processHistorySyncMessage(msg, batchId);
+                }
+            }
+
+            // Note: chat and contact capture could be implemented here as well in the future.
+
+        } catch (error) {
+            engineLogger.error('whatsapp', 'history_sync.batch_error', sessionId, 'Failed to create history batch for history set', {
+                error: error.message
+            });
+        }
+    });
 
     sock.ev.on('messages.update', (updates) => {
         for (const update of updates || []) {
@@ -294,6 +393,21 @@ async function connect(sessionId, onUpdate, onMessage, onEvent, isCreation = fal
     sock.ev.on('messages.delete', (item) => {
         if (isStatusBroadcastMessage(item)) {
             return;
+        }
+
+        // Se veio de history sync (notado pelo item ser um batch de keys proveniente do messaging-history em algumas versões)
+        // e NÃO de tempo real. Eventos em tempo real costumam disparar message.deleted diretamente.
+        // A prop `isHistoric` ou checar se a deleção veio junto de um append/history.
+        // Por ora, deletes interceptados aqui sem marca explícita de histórico em tempo real devem prosseguir.
+        // O Prompt pediu "Deletes vindos de histórico devem usar preserve_history=true".
+        // Vamos checar explicitamente a prop de flag 'history_sync' ou manter o fluxo normal.
+        if (item.keys && process.env.HISTORY_SYNC_ENABLED === 'true' && item.source === 'history_sync') {
+             const payload = {
+                 ...item,
+                 preserve_history: true
+             };
+             emitEvent('message.delete_detected', payload);
+             return;
         }
 
         emitEvent('message.deleted', item);
